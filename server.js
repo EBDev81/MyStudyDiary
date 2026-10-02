@@ -1,0 +1,69 @@
+const http = require("node:http");
+const fs = require("node:fs");
+const path = require("node:path");
+const { createRepository, DataReadError, CORRUPTION_MESSAGE } = require("./repository.js");
+
+const PORT = 3000;
+const PUBLIC_DIRECTORY = __dirname;
+const CONTENT_TYPES = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8"
+};
+
+function sendJson(response, status, body) {
+  response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+  response.end(JSON.stringify(body));
+}
+
+function createServer({ repository = createRepository() } = {}) {
+  return http.createServer((request, response) => {
+    const url = new URL(request.url, "http://localhost");
+    if (request.method === "GET" && url.pathname === "/api/data") {
+      try {
+        sendJson(response, 200, { ok: true, data: repository.read() });
+      } catch (error) {
+        const message = error instanceof DataReadError ? CORRUPTION_MESSAGE : "No se puede conectar con el servidor.";
+        sendJson(response, 503, { ok: false, error: message });
+      }
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/api/operations") {
+      let body = "";
+      request.on("data", chunk => { body += chunk; });
+      request.on("end", async () => {
+        try {
+          const operation = JSON.parse(body);
+          const result = await repository.enqueue(operation);
+          sendJson(response, 200, result);
+        } catch (error) {
+          sendJson(response, 503, { ok: false, error: error.message || "No se han podido guardar los datos. Inténtalo de nuevo." });
+        }
+      });
+      return;
+    }
+    if (request.method !== "GET") {
+      sendJson(response, 405, { ok: false, error: "Método no permitido." });
+      return;
+    }
+    let relative = decodeURIComponent(url.pathname);
+    if (relative === "/") relative = "/index.html";
+    const filePath = path.resolve(PUBLIC_DIRECTORY, `.${relative}`);
+    if (!filePath.startsWith(`${PUBLIC_DIRECTORY}${path.sep}`)) {
+      response.writeHead(404); response.end("No encontrado"); return;
+    }
+    fs.readFile(filePath, (error, content) => {
+      if (error) { response.writeHead(error.code === "ENOENT" ? 404 : 500); response.end("No encontrado"); return; }
+      response.writeHead(200, { "Content-Type": CONTENT_TYPES[path.extname(filePath)] || "application/octet-stream" });
+      response.end(content);
+    });
+  });
+}
+
+if (require.main === module) {
+  const server = createServer();
+  server.listen(PORT, "localhost", () => console.log(`Diario de Estudio: http://localhost:${PORT}`));
+}
+
+module.exports = { createServer, PORT };

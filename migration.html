@@ -1,0 +1,44 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><title>Migración — Diario de Estudio</title>
+<main><h1>Migración de datos</h1><p id="estado" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">Se leerán las copias de este navegador y se enviarán al servidor local.</p><div id="decision" hidden><label for="goalDecision">Hay dos objetivos distintos. Elige cuál conservar:</label><select id="goalDecision" required><option value="">Selecciona un objetivo</option></select></div><button id="migrar">Confirmar migración</button></main>
+<script>
+const keys = ["diario-de-estudio-sesiones", "diario-estudio-sesiones", "diario-de-estudio-objetivo-semanal"];
+function read(key) { const raw = localStorage.getItem(key); if (raw === null) return undefined; try { return JSON.parse(raw); } catch { return { __invalid: true, __reason: "JSON corrupto", __count: 1 }; } }
+function localDate() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+document.querySelector("#migrar").addEventListener("click", async () => {
+  const estado = document.querySelector("#estado");
+  if (!window.confirm("¿Quieres migrar los datos de este navegador al archivo JSON?")) { estado.textContent = "Migración cancelada; no se ha modificado nada."; estado.focus(); return; }
+   const sources = { [keys[0]]: read(keys[0]), [keys[1]]: read(keys[1]), [keys[2]]: read(keys[2]) };
+   let existingGoal = null;
+   try {
+     const current = await fetch("/api/data");
+     const currentResult = await current.json();
+     if (current.ok && currentResult.ok && Number.isInteger(currentResult.data.objetivoSemanal)) existingGoal = currentResult.data.objetivoSemanal;
+   } catch { /* El POST mostrará el error de conexión si tampoco está disponible. */ }
+   const historicalGoal = sources[keys[2]];
+   const candidates = [existingGoal, historicalGoal].filter(value => Number.isInteger(value) && value >= 1 && value <= 5040);
+   const distinctGoals = [...new Set(candidates)];
+   const decisionBlock = document.querySelector("#decision");
+   const decisionSelect = document.querySelector("#goalDecision");
+   decisionSelect.innerHTML = '<option value="">Selecciona un objetivo</option>';
+   distinctGoals.forEach(goal => decisionSelect.insertAdjacentHTML("beforeend", `<option value="${goal}">${goal} minutos</option>`));
+   decisionBlock.hidden = distinctGoals.length < 2;
+  const decision = document.querySelector("#goalDecision");
+    if (distinctGoals.length > 1 && !decision.value) { estado.textContent = "Debes elegir qué objetivo conservar."; estado.focus(); return; }
+  const sourceNames = keys.filter(k => localStorage.getItem(k) !== null);
+  try {
+    const ignoredSources = [];
+    for (const key of keys) {
+      const value = sources[key];
+      if (value === undefined) continue;
+      if (value && value.__invalid) ignoredSources.push({ source:key, reason:value.__reason, count:value.__count });
+      else if (key === keys[2] ? !(Number.isInteger(value) && value >= 1 && value <= 5040) : !Array.isArray(value)) ignoredSources.push({ source:key, reason:"formato inválido o incompleto", count:1 });
+    }
+    const payload = { confirmed:true, completedAt:localDate(), sources, sourceNames, ignoredSources };
+    if (distinctGoals.length > 1) payload.goalDecision = Number(decision.value);
+    const response = await fetch("/api/operations", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ operationId:`migration-${Date.now()}`, type:"migration", payload }) });
+     const result = await response.json();
+     estado.textContent = response.ok && result.ok ? "Migración completada. Las copias originales siguen intactas." : (result.error || "La migración ha fallado. Las copias originales siguen intactas. Puedes reintentarlo.");
+     estado.focus();
+   } catch { estado.textContent = "No se puede conectar con el servidor. Puedes reintentarlo."; estado.focus(); }
+});
+</script>

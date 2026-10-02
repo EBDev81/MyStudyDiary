@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#17324d">
+  <title>Diario de Estudio</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="enlace-salto" href="#contenido-principal">Saltar al contenido</a>
+  <main class="contenedor" id="contenido-principal">
+    <header class="encabezado">
+      <p class="etiqueta">DIARIO DE ESTUDIO</p>
+      <h1>Un día más, un paso más.</h1>
+      <p class="subtitulo">Registra lo que estudias y mantén tu ritmo.</p>
+    </header>
+
+    <section class="racha" aria-label="Racha actual y mejor racha">
+      <div class="racha-actual">
+        <span class="fuego">🔥</span>
+        <div>
+          <strong id="racha">0</strong>
+          <span id="texto-racha">Días de racha</span>
+        </div>
+      </div>
+      <div class="mejor-racha">
+        <span class="trofeo" aria-hidden="true">🏆</span>
+        <strong id="mejor-racha">0</strong>
+        <span id="texto-mejor-racha">Mejor racha</span>
+      </div>
+      <div class="minutos-semana">
+        <span class="reloj" aria-hidden="true">⏱️</span>
+        <strong id="minutos-semana">0</strong>
+        <span>Minutos esta semana</span>
+      </div>
+      <div class="dias-mes">
+        <span class="calendario" aria-hidden="true">📅</span>
+        <strong id="dias-mes">0</strong>
+        <span>Días estudiados este mes</span>
+      </div>
+    </section>
+
+    <section class="tarjeta" aria-labelledby="titulo-objetivo">
+      <h2 id="titulo-objetivo">Objetivo semanal</h2>
+      <div id="objetivo-vista" class="objetivo-vista" role="status" aria-live="polite">No hay un objetivo semanal configurado</div>
+      <form id="formulario-objetivo">
+        <label for="objetivo-semanal">Minutos de estudio por semana</label>
+        <input id="objetivo-semanal" name="objetivo" type="number" min="1" max="5040" step="1"
+          aria-describedby="objetivo-error" inputmode="numeric" autocomplete="off" placeholder="Ej. 300">
+        <p id="objetivo-error" role="alert" aria-live="polite" hidden></p>
+        <button class="boton boton-primario" type="submit" id="guardar-objetivo">Establecer objetivo</button>
+      </form>
+      <button class="boton boton-secundario" type="button" id="restablecer-objetivo">Restablecer objetivo</button>
+       <p id="objetivo-mensaje" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></p>
+    </section>
+
+    <section class="tarjeta mapa-seccion" aria-labelledby="titulo-mapa">
+      <div class="mapa-cabecera">
+        <div>
+          <p class="etiqueta">CONSTANCIA</p>
+          <h2 id="titulo-mapa">Mapa de estudio</h2>
+        </div>
+        <span class="mapa-periodo">Últimas doce semanas</span>
+      </div>
+      <div class="mapa-contenedor" aria-label="Actividad de estudio por día">
+        <div id="mapa-calor" class="mapa-calor"></div>
+      </div>
+      <div class="leyenda" aria-label="Leyenda de intensidad">
+        <span>Menos</span>
+        <i class="celda-calor estado-none" aria-hidden="true"></i>
+        <i class="celda-calor estado-low" aria-hidden="true"></i>
+        <i class="celda-calor estado-medium-low" aria-hidden="true"></i>
+        <i class="celda-calor estado-medium-high" aria-hidden="true"></i>
+        <i class="celda-calor estado-high" aria-hidden="true"></i>
+        <span>Más</span>
+      </div>
+    </section>
+
+    <section class="tarjeta">
+      <h2>Registrar sesión</h2>
+      <form id="formulario">
+        <label for="fecha">Fecha</label>
+      <input id="fecha" name="fecha" type="date" autocomplete="off" required>
+
+        <label for="tema">Tema</label>
+      <input id="tema" name="tema" type="text" placeholder="¿Qué has estudiado…?" autocomplete="off" required>
+
+        <label for="minutos">Minutos</label>
+      <input id="minutos" name="minutos" type="number" min="1" step="1" inputmode="numeric" placeholder="Ej. 45" required>
+
+      <button class="boton boton-primario" type="submit">Guardar sesión</button>
+      </form>
+    </section>
+
+    <section class="sesiones">
+      <h2>Sesiones</h2>
+      <p id="sin-sesiones" class="vacio">Todavía no hay sesiones registradas.</p>
+      <ul id="lista-sesiones"></ul>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
