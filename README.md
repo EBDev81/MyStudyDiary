@@ -3,14 +3,13 @@
 ## Qué es
 
 Diario de Estudio es una aplicación educativa para registrar sesiones de estudio y convertir el esfuerzo diario en señales visuales de progreso. Su objetivo es que una persona pueda apuntar qué ha estudiado, cuánto tiempo ha dedicado y comprobar si mantiene la constancia.
+
 <img width="962" height="348" alt="image" src="https://github.com/user-attachments/assets/7879c53b-0c46-4dff-a846-002b4b1c6f0a" />
 <img width="916" height="432" alt="image" src="https://github.com/user-attachments/assets/dd43d6c6-58e3-486f-aa1c-ad9b0a3c1dbd" />
 <img width="914" height="290" alt="image" src="https://github.com/user-attachments/assets/18e26823-2b0c-4e21-8686-e5aba5498c03" />
 <img width="918" height="413" alt="image" src="https://github.com/user-attachments/assets/74fe0abe-2a36-4df0-a8ee-f85fb8115053" />
 
-El proyecto está creado y mantenido dentro de **OpenCode**, en:
-
-`/Users/[USUARIO]/opencode_work/MyStudyDiary`
+El proyecto está creado y mantenido con **OpenCode** siguiendo un flujo de trabajo **Specification-Driven Development (SDD)**.
 
 La aplicación está pensada para alguien que empieza a programar: no depende de herramientas complejas y se puede leer directamente. El modo oficial se ejecuta con Node.js 18 o posterior.
 
@@ -55,6 +54,7 @@ No se utilizan:
 - `styles.css`: identidad visual, layout de escritorio y móvil, botones, tarjetas, estados, foco y accesibilidad visual.
 - `app.js`: carga y guardado de datos, lógica de fechas, rachas, estadísticas, objetivo semanal y actualización de la interfaz.
 - `server.js`: servidor local, API de persistencia y validación del documento JSON.
+- `repository.js`: acceso y operaciones sobre los datos persistidos en JSON.
 - `migration.html`: puente temporal para migrar los datos históricos de `localStorage`.
 - `data/data.json`: fuente de verdad JSON del proyecto.
 - `data/data.backup.json`: copia de seguridad periódica, nunca fuente alternativa ni restauración automática.
@@ -76,6 +76,9 @@ El proyecto utiliza Specification-Driven Development (SDD): primero se define qu
 - `specs/002-weekly-goal/spec.md`: especificación del objetivo semanal.
 - `specs/002-weekly-goal/plan.md`: plan técnico del objetivo semanal.
 - `specs/002-weekly-goal/tasks.md`: tareas del objetivo semanal.
+- `specs/003-file-persistence/spec.md`: especificación de la persistencia local mediante archivo JSON.
+- `specs/003-file-persistence/plan.md`: plan técnico de la persistencia local.
+- `specs/003-file-persistence/tasks.md`: tareas de la persistencia local.
 - `specs/004-clear-main-data/spec.md`: especificación del borrado seguro del estado principal.
 - `specs/004-clear-main-data/plan.md`: plan técnico del borrado seguro.
 - `specs/004-clear-main-data/tasks.md`: tareas del borrado seguro.
@@ -136,25 +139,35 @@ Se utilizó para revisar y mejorar:
 
 ### Documento JSON
 
-Las sesiones y el objetivo se guardan en `data/data.json`, un documento validado cuya raíz contiene `version`, `sesiones`, `objetivoSemanal` y `metadata`. Las estadísticas se calculan al cargar y no se persisten. Los campos desconocidos se conservan para no perder información.
+Las sesiones y el objetivo semanal se guardan en `data/data.json`, un documento validado cuya raíz contiene `version`, `sesiones`, `objetivoSemanal` y `metadata`.
+
+Las estadísticas, rachas, mapa de calor y progreso semanal se calculan al cargar y no se persisten.
+
+Los campos desconocidos del documento se conservan para evitar pérdidas de información.
 
 La copia `data/data.backup.json` representa el último backup válido. No se usa para reparar ni sobrescribir automáticamente el documento principal.
 
 ### Migración desde localStorage
 
-La aplicación normal no usa `localStorage` como persistencia. Para datos de versiones anteriores se abre el puente temporal `migration.html` desde el contexto que conserva las claves:
+La aplicación normal ya no usa `localStorage` como sistema de persistencia.
 
-1. El puente muestra las fuentes y pide confirmación explícita.
-2. El servidor normaliza y deduplica las sesiones, conservando las claves originales.
+Para datos procedentes de versiones anteriores se dispone del puente temporal `migration.html`, que debe abrirse desde el contexto del navegador que conserva las claves históricas.
+
+El proceso funciona de la siguiente manera:
+
+1. El puente muestra las fuentes encontradas y pide confirmación explícita.
+2. El servidor normaliza y desduplica las sesiones, conservando las claves originales.
 3. Solo una migración exitosa marca `metadata.migration.status` como `completed`.
 
-Si se cancela o falla, el estado queda pendiente/fallido y se puede reintentar sin duplicar datos. Tras `completed`, la aplicación no vuelve a leer ni escribir `localStorage`.
+Si la migración se cancela o falla, el estado queda pendiente o fallido y puede reintentarse sin duplicar datos.
+
+Tras quedar marcada como `completed`, la aplicación normal no vuelve a leer ni escribir `localStorage`.
 
 Las claves históricas son:
 
 `diario-de-estudio-sesiones`
 
-El formato actual normalizado es:
+El formato actual normalizado de una sesión es:
 
 ```js
 {
@@ -165,7 +178,7 @@ El formato actual normalizado es:
 }
 ```
 
-La aplicación también puede leer el formato histórico con:
+La migración también puede reconocer el formato histórico:
 
 ```js
 {
@@ -177,11 +190,11 @@ La aplicación también puede leer el formato histórico con:
 
 ### Objetivo semanal
 
-El objetivo se guarda separado de las sesiones en:
+El objetivo semanal se guarda en `data/data.json` junto con las sesiones, dentro del campo `objetivoSemanal`.
 
-`diario-de-estudio-objetivo-semanal`
+Su valor es un entero entre `1` y `5.040`.
 
-Su valor es un entero entre `1` y `5.040`. El progreso semanal no se guarda: se calcula a partir de las sesiones existentes.
+El progreso semanal no se guarda: se calcula dinámicamente a partir de las sesiones existentes.
 
 Reglas importantes:
 
@@ -193,24 +206,27 @@ Reglas importantes:
 
 ### Borrado de sesiones
 
-La aplicación incluye un botón para borrar todas las sesiones de estudio. Antes de
-ejecutarlo se muestra una confirmación explícita e irreversible con esta advertencia
-exacta:
+La aplicación incluye un botón para borrar todas las sesiones de estudio.
+
+Antes de ejecutarlo se muestra una confirmación explícita e irreversible con esta advertencia:
 
 > Vas a borrar todas las sesiones de estudio. Esta acción no se puede deshacer y la copia de seguridad no se borrará. El objetivo semanal se conservará.
 
-La confirmación elimina únicamente las sesiones del documento principal y conserva
-el objetivo semanal. `data/data.backup.json` permanece intacto y nunca se utiliza
-para restaurar automáticamente los datos. La acción no tiene deshacer.
+La confirmación elimina únicamente las sesiones del documento principal y conserva el objetivo semanal.
 
-Si el borrado no puede completarse, la aplicación muestra un error general claro y
-no presenta la operación como realizada. Ante una respuesta incierta por
-desconexión o tiempo de espera, no se reintenta automáticamente: hay que recargar
-la página y decidir manualmente si se vuelve a intentar.
+`data/data.backup.json` permanece intacto y nunca se utiliza para restaurar automáticamente los datos.
+
+La acción no tiene deshacer.
+
+Si el borrado no puede completarse, la aplicación muestra un error general claro y no presenta la operación como realizada.
+
+Ante una respuesta incierta por desconexión o tiempo de espera, no se reintenta automáticamente: hay que recargar la página y decidir manualmente si se vuelve a intentar.
 
 ## Lógica de fechas y estadísticas
 
-La lógica se mantiene separada de la interfaz siempre que es posible. Las funciones puras reciben `today` para que sus resultados sean deterministas en los tests.
+La lógica se mantiene separada de la interfaz siempre que es posible.
+
+Las funciones puras reciben `today` para que sus resultados sean deterministas en los tests.
 
 Se calculan dinámicamente:
 
@@ -223,15 +239,67 @@ Se calculan dinámicamente:
 
 ## Cómo abrir la aplicación
 
-1. Ve a `/Users/[USUARIO]/opencode_work/MyStudyDiary`.
-2. Ejecuta `node server.js`.
-3. Abre `http://localhost:3000`.
+### Requisitos
 
-No se debe usar `file://` como modo oficial: no proporciona la persistencia JSON del proyecto.
+- Node.js 18 o posterior.
+
+### Ejecución
+
+1. Clona el repositorio.
+2. Abre una terminal en la carpeta `MyStudyDiary`.
+3. Ejecuta:
+
+```bash
+node server.js
+```
+
+4. Abre en el navegador:
+
+```text
+http://localhost:3000
+```
+
+No se debe usar `file://` como modo oficial, ya que no proporciona la persistencia JSON del proyecto.
 
 ## Historial de cambios
 
-- **Persistencia local mediante Node.js (spec 003):** se sustituyó `localStorage` como fuente oficial por `data/data.json`, con backup en `data/data.backup.json` y un puente de migración único. El cambio permite compartir el mismo estado entre clientes, validar y proteger los archivos, y conservar los datos históricos sin depender del aislamiento del navegador.
+### Persistencia local mediante Node.js — spec 003
+
+Se sustituyó `localStorage` como fuente oficial de persistencia por `data/data.json`.
+
+La nueva arquitectura utiliza:
+
+```text
+Frontend
+   ↓
+HTTP / fetch
+   ↓
+server.js
+   ↓
+repository.js
+   ↓
+data/data.json
+```
+
+También se incorporó:
+
+- Backup mediante `data/data.backup.json`.
+- Validación del documento JSON.
+- Migración única desde el antiguo `localStorage`.
+- Persistencia independiente del navegador.
+- Conservación de los datos entre ejecuciones del servidor.
+
+### Borrado seguro de sesiones — spec 004
+
+Se añadió la posibilidad de borrar todas las sesiones desde la interfaz mediante una acción explícita y confirmada.
+
+El borrado:
+
+- Vacía únicamente las sesiones.
+- Conserva el objetivo semanal.
+- No elimina el backup.
+- No realiza restauraciones automáticas.
+- No se reintenta automáticamente en caso de respuesta incierta.
 
 ## Comandos y workflow SDD
 
@@ -265,7 +333,7 @@ Ejecutar desde la carpeta del proyecto:
 node --test
 ```
 
-La suite actual cubre lógica de fechas, rachas, estadísticas, mapa de calor y objetivo semanal.
+La suite cubre lógica de fechas, rachas, estadísticas, mapa de calor, objetivo semanal, persistencia JSON y borrado de sesiones.
 
 También se puede comprobar la sintaxis de la aplicación con:
 
@@ -285,15 +353,23 @@ Después de cambios visuales o funcionales:
 6. Confirmar que no existe overflow horizontal.
 7. Comprobar que los datos guardados no se han borrado ni alterado.
 
-Para comprobar manualmente el borrado, se verifica que el botón sea localizable y
-accesible, que la advertencia anterior aparezca antes de confirmar, que cancelar no
-cambie nada y que confirmar deje vacías la lista y las estadísticas de sesiones,
-manteniendo visible el objetivo semanal. También se comprueba que la copia de
-seguridad permanezca intacta, que los errores no anuncien un éxito y que no haya
-reintento automático tras una desconexión o un tiempo de espera. Estas comprobaciones
-se realizan en escritorio y en una vista móvil de 375 × 812, con la consola limpia
-y sin overflow horizontal.
+Para comprobar manualmente el borrado:
+
+1. Verificar que el botón sea localizable y accesible.
+2. Confirmar que la advertencia aparezca antes de ejecutar el borrado.
+3. Comprobar que cancelar no modifica ningún dato.
+4. Confirmar que ejecutar el borrado deja vacías la lista y las estadísticas de sesiones.
+5. Comprobar que el objetivo semanal continúa visible y conserva su valor.
+6. Confirmar que la copia de seguridad permanece intacta.
+7. Verificar que los errores no anuncien un éxito incorrectamente.
+8. Confirmar que no existe reintento automático tras una desconexión o tiempo de espera.
+9. Repetir las comprobaciones en escritorio y en una vista móvil de `375 × 812`.
+10. Confirmar que la consola permanece limpia y que no existe overflow horizontal.
 
 ## Protección de datos
 
-Nunca se deben borrar, reiniciar ni sobrescribir datos guardados sin consentimiento explícito del usuario. No se eliminan sesiones, claves históricas ni archivos JSON para probar. El backup no se restaura automáticamente y un fallo de backup nunca deshace un documento principal válido.
+Nunca se deben borrar, reiniciar ni sobrescribir datos guardados sin consentimiento explícito del usuario.
+
+No se eliminan sesiones, claves históricas ni archivos JSON para realizar pruebas.
+
+El backup no se restaura automáticamente y un fallo de backup nunca deshace un documento principal válido.
