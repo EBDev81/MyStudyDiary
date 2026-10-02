@@ -6,7 +6,7 @@ Diario de Estudio es una aplicación educativa para registrar sesiones de estudi
 
 Repositorio: [github.com/EBDev81/MyStudyDiary](https://github.com/EBDev81/MyStudyDiary)
 
-<img width="962" height="348" alt="image" src="https://github.com/user-attachments/assets/7879c53b-0c46-4dff-a846-002b4b1c6f0a" />
+<img width="1904" height="506" alt="image" src="https://github.com/user-attachments/assets/f2d60770-3ff8-4af2-9494-acc1f95cd921" />
 <img width="916" height="432" alt="image" src="https://github.com/user-attachments/assets/dd43d6c6-58e3-486f-aa1c-ad9b0a3c1dbd" />
 <img width="914" height="290" alt="image" src="https://github.com/user-attachments/assets/18e26823-2b0c-4e21-8686-e5aba5498c03" />
 <img width="918" height="413" alt="image" src="https://github.com/user-attachments/assets/74fe0abe-2a36-4df0-a8ee-f85fb8115053" />
