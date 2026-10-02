@@ -7,6 +7,19 @@ const DATA_FILE = path.join(DATA_DIRECTORY, "data.json");
 const BACKUP_FILE = path.join(DATA_DIRECTORY, "data.backup.json");
 const CORRUPTION_MESSAGE = "No se pueden leer los datos. Conserva una copia del archivo y corrígelo antes de continuar.";
 const WRITE_MESSAGE = "No se han podido guardar los datos. Inténtalo de nuevo.";
+const CLEAR_MESSAGES = {
+  INVALID_CLEAR_REQUEST: "La confirmación de borrado no es válida.",
+  IDEMPOTENCY_CONFLICT: "La operación ya existe con otros datos.",
+  MAIN_DATA_MISSING: "No se pueden borrar los datos porque no existe el archivo principal.",
+  DATA_CORRUPT: CORRUPTION_MESSAGE,
+  CLEAR_WRITE_FAILED: "No se han podido borrar los datos. Inténtalo de nuevo."
+};
+
+function clearError(code) {
+  const error = new Error(CLEAR_MESSAGES[code]);
+  error.code = code;
+  return error;
+}
 
 class DataReadError extends Error {
   constructor(filePath, cause) {
@@ -79,6 +92,34 @@ function persistBackup(backupFile, document) {
 
 function fingerprint(operation) {
   return JSON.stringify({ type: operation.type, payload: operation.payload });
+}
+
+function isValidClearRequest(operation) {
+  if (!operation || typeof operation !== "object") return false;
+  const keys = Object.keys(operation);
+  return keys.length === 3 && keys.includes("type") && keys.includes("operationId") && keys.includes("confirmation") &&
+    operation.type === "clear-main-data" && typeof operation.operationId === "string" && operation.operationId.length > 0 &&
+    operation.confirmation === "BORRAR TODO";
+}
+
+function operationFingerprint(operation) {
+  return JSON.stringify({
+    type: operation.type,
+    operationId: operation.operationId,
+    confirmation: operation.confirmation
+  });
+}
+
+// Construye el estado vacío sin reutilizar ningún dato de las sesiones.
+function buildClearedDocument(document) {
+  const next = structuredClone(document);
+  const deletedSessions = next.sesiones.length;
+  next.sesiones = [];
+  return { document: next, deletedSessions };
+}
+
+function deriveBackupPending(document) {
+  return document.metadata.successfulWrites - document.metadata.backupSuccessfulWrites >= 5;
 }
 
 function applyOperation(document, operation) {
@@ -160,14 +201,35 @@ function createRepository({ dataFile = DATA_FILE, backupFile = BACKUP_FILE } = {
   const known = new Map();
   let queue = Promise.resolve();
   function enqueue(operation) {
+    if (operation && operation.type === "clear-main-data" && !isValidClearRequest(operation)) {
+      if (typeof operation.operationId === "string" && known.has(operation.operationId) &&
+          known.get(operation.operationId).hash !== operationFingerprint(operation)) {
+        return Promise.reject(clearError("IDEMPOTENCY_CONFLICT"));
+      }
+      return Promise.reject(clearError("INVALID_CLEAR_REQUEST"));
+    }
     if (!operation || typeof operation.operationId !== "string" || !operation.operationId) return Promise.reject(new Error(WRITE_MESSAGE));
     const key = operation.operationId;
-    const hash = fingerprint(operation);
+    const hash = operation.type === "clear-main-data" ? operationFingerprint(operation) : fingerprint(operation);
     if (known.has(key)) {
-      if (known.get(key).hash !== hash) return Promise.reject(new Error("operationId ya utilizado con otro payload"));
+       if (known.get(key).hash !== hash) return Promise.reject(clearError("IDEMPOTENCY_CONFLICT"));
       return known.get(key).promise;
     }
     const promise = queue.then(() => {
+      if (operation.type === "clear-main-data") {
+        // A diferencia de la lectura normal, borrar nunca crea el principal.
+         if (!fs.existsSync(dataFile)) throw clearError("MAIN_DATA_MISSING");
+         let current;
+         try { current = readValidatedFile(dataFile); } catch { throw clearError("DATA_CORRUPT"); }
+         const cleared = buildClearedDocument(current);
+         let result;
+         try {
+           atomicWrite(dataFile, cleared.document);
+           result = readValidatedFile(dataFile);
+         } catch { throw clearError("CLEAR_WRITE_FAILED"); }
+         return { ok: true, document: result, deletedSessions: cleared.deletedSessions,
+           backupPending: deriveBackupPending(result) };
+      }
       const current = readDataFile(dataFile);
       const next = applyOperation(current, operation);
       const persisted = atomicWrite(dataFile, next);
@@ -185,7 +247,8 @@ function createRepository({ dataFile = DATA_FILE, backupFile = BACKUP_FILE } = {
       }
       return { ok: true, document: readDataFile(dataFile), backupPending };
     }).catch((error) => {
-      if (error instanceof DataReadError) throw error;
+       if (error.code) throw error;
+       if (operation && operation.type === "clear-main-data") throw clearError("CLEAR_WRITE_FAILED");
       throw new Error(error.message === WRITE_MESSAGE ? WRITE_MESSAGE : WRITE_MESSAGE);
     });
     known.set(key, { hash, promise });
@@ -207,5 +270,6 @@ module.exports = {
   DataReadError, createRepository, readDataFile, readBackupFile, atomicWrite,
   WRITE_MESSAGE,
   readValidatedFile
-  , shouldBackup, persistBackup
+  , shouldBackup, persistBackup, isValidClearRequest, operationFingerprint,
+  buildClearedDocument, deriveBackupPending
 };

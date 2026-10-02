@@ -1,41 +1,173 @@
 {
   "version": 1,
   "sesiones": [
-    {"fecha":"2026-07-20","tema":"Repaso de fundamentos","minutos":35},
-    {"fecha":"2026-07-22","tema":"Ejercicios de lógica","minutos":50},
-    {"fecha":"2026-07-25","tema":"Resumen semanal","minutos":25},
-    {"fecha":"2026-07-27","tema":"Funciones","minutos":45},
-    {"fecha":"2026-07-29","tema":"Práctica de arrays","minutos":60},
-    {"fecha":"2026-08-01","tema":"Repaso de errores","minutos":30},
-    {"fecha":"2026-08-03","tema":"Objetos y datos","minutos":40},
-    {"fecha":"2026-08-05","tema":"Ejercicios prácticos","minutos":55},
-    {"fecha":"2026-08-08","tema":"Repaso semanal","minutos":35},
-    {"fecha":"2026-08-10","tema":"DOM y eventos","minutos":50},
-    {"fecha":"2026-08-12","tema":"Formularios","minutos":40},
-    {"fecha":"2026-08-15","tema":"Práctica de validación","minutos":65},
-    {"fecha":"2026-08-17","tema":"HTTP básico","minutos":30},
-    {"fecha":"2026-08-19","tema":"Servidor Node.js","minutos":70},
-    {"fecha":"2026-08-22","tema":"Repaso de APIs","minutos":45},
-    {"fecha":"2026-08-24","tema":"JSON y persistencia","minutos":55},
-    {"fecha":"2026-08-26","tema":"Lectura de archivos","minutos":35},
-    {"fecha":"2026-08-29","tema":"Práctica de errores","minutos":50},
-    {"fecha":"2026-08-31","tema":"Tests automatizados","minutos":40},
-    {"fecha":"2026-09-02","tema":"Casos límite","minutos":60},
-    {"fecha":"2026-09-05","tema":"Repaso de tests","minutos":30},
-    {"fecha":"2026-09-07","tema":"Accesibilidad","minutos":45},
-    {"fecha":"2026-09-09","tema":"ARIA y foco","minutos":35},
-    {"fecha":"2026-09-12","tema":"Revisión responsive","minutos":55},
-    {"fecha":"2026-09-14","tema":"Fechas locales","minutos":50},
-    {"fecha":"2026-09-16","tema":"Cálculo de rachas","minutos":65},
-    {"fecha":"2026-09-19","tema":"Estadísticas derivadas","minutos":40},
-    {"fecha":"2026-09-21","tema":"Repaso general","minutos":30},
-    {"fecha":"2026-09-23","tema":"Mejora de consultas","minutos":50},
-    {"fecha":"2026-09-26","tema":"Simulación de errores","minutos":45},
-    {"fecha":"2026-09-29","tema":"Integración final","minutos":60},
-    {"fecha":"2026-10-01","tema":"Verificación de datos","minutos":40},
-    {"fecha":"2026-10-02","tema":"Comprobación del mapa de calor","minutos":55}
+    {
+      "fecha": "2026-07-20",
+      "tema": "Repaso de fundamentos",
+      "minutos": 35
+    },
+    {
+      "fecha": "2026-07-22",
+      "tema": "Ejercicios de lógica",
+      "minutos": 50
+    },
+    {
+      "fecha": "2026-07-25",
+      "tema": "Resumen semanal",
+      "minutos": 25
+    },
+    {
+      "fecha": "2026-07-27",
+      "tema": "Funciones",
+      "minutos": 45
+    },
+    {
+      "fecha": "2026-07-29",
+      "tema": "Práctica de arrays",
+      "minutos": 60
+    },
+    {
+      "fecha": "2026-08-01",
+      "tema": "Repaso de errores",
+      "minutos": 30
+    },
+    {
+      "fecha": "2026-08-03",
+      "tema": "Objetos y datos",
+      "minutos": 40
+    },
+    {
+      "fecha": "2026-08-05",
+      "tema": "Ejercicios prácticos",
+      "minutos": 55
+    },
+    {
+      "fecha": "2026-08-08",
+      "tema": "Repaso semanal",
+      "minutos": 35
+    },
+    {
+      "fecha": "2026-08-10",
+      "tema": "DOM y eventos",
+      "minutos": 50
+    },
+    {
+      "fecha": "2026-08-12",
+      "tema": "Formularios",
+      "minutos": 40
+    },
+    {
+      "fecha": "2026-08-15",
+      "tema": "Práctica de validación",
+      "minutos": 65
+    },
+    {
+      "fecha": "2026-08-17",
+      "tema": "HTTP básico",
+      "minutos": 30
+    },
+    {
+      "fecha": "2026-08-19",
+      "tema": "Servidor Node.js",
+      "minutos": 70
+    },
+    {
+      "fecha": "2026-08-22",
+      "tema": "Repaso de APIs",
+      "minutos": 45
+    },
+    {
+      "fecha": "2026-08-24",
+      "tema": "JSON y persistencia",
+      "minutos": 55
+    },
+    {
+      "fecha": "2026-08-26",
+      "tema": "Lectura de archivos",
+      "minutos": 35
+    },
+    {
+      "fecha": "2026-08-29",
+      "tema": "Práctica de errores",
+      "minutos": 50
+    },
+    {
+      "fecha": "2026-08-31",
+      "tema": "Tests automatizados",
+      "minutos": 40
+    },
+    {
+      "fecha": "2026-09-02",
+      "tema": "Casos límite",
+      "minutos": 60
+    },
+    {
+      "fecha": "2026-09-05",
+      "tema": "Repaso de tests",
+      "minutos": 30
+    },
+    {
+      "fecha": "2026-09-07",
+      "tema": "Accesibilidad",
+      "minutos": 45
+    },
+    {
+      "fecha": "2026-09-09",
+      "tema": "ARIA y foco",
+      "minutos": 35
+    },
+    {
+      "fecha": "2026-09-12",
+      "tema": "Revisión responsive",
+      "minutos": 55
+    },
+    {
+      "fecha": "2026-09-14",
+      "tema": "Fechas locales",
+      "minutos": 50
+    },
+    {
+      "fecha": "2026-09-16",
+      "tema": "Cálculo de rachas",
+      "minutos": 65
+    },
+    {
+      "fecha": "2026-09-19",
+      "tema": "Estadísticas derivadas",
+      "minutos": 40
+    },
+    {
+      "fecha": "2026-09-21",
+      "tema": "Repaso general",
+      "minutos": 30
+    },
+    {
+      "fecha": "2026-09-23",
+      "tema": "Mejora de consultas",
+      "minutos": 50
+    },
+    {
+      "fecha": "2026-09-26",
+      "tema": "Simulación de errores",
+      "minutos": 45
+    },
+    {
+      "fecha": "2026-09-29",
+      "tema": "Integración final",
+      "minutos": 60
+    },
+    {
+      "fecha": "2026-10-01",
+      "tema": "Verificación de datos",
+      "minutos": 40
+    },
+    {
+      "fecha": "2026-10-02",
+      "tema": "Comprobación del mapa de calor",
+      "minutos": 55
+    }
   ],
-  "objetivoSemanal": 100,
+  "objetivoSemanal": 300,
   "metadata": {
     "migration": {
       "status": "pending",
@@ -43,7 +175,7 @@
       "ignoredSources": [],
       "completedAt": null
     },
-    "successfulWrites": 1,
+    "successfulWrites": 3,
     "backupSuccessfulWrites": 0
   }
 }

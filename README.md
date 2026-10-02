@@ -27,6 +27,7 @@ La aplicación está pensada para alguien que empieza a programar: no depende de
 - Fijar un objetivo semanal de entre 1 y 5.040 minutos.
 - Mostrar el progreso del objetivo como pendiente, cumplido o superado.
 - Modificar o restablecer el objetivo con confirmación explícita.
+- Borrar todas las sesiones desde un botón visible, con confirmación irreversible.
 - Conservar los datos entre recargas en el JSON del proyecto.
 
 ## Tecnologías
@@ -75,6 +76,9 @@ El proyecto utiliza Specification-Driven Development (SDD): primero se define qu
 - `specs/002-weekly-goal/spec.md`: especificación del objetivo semanal.
 - `specs/002-weekly-goal/plan.md`: plan técnico del objetivo semanal.
 - `specs/002-weekly-goal/tasks.md`: tareas del objetivo semanal.
+- `specs/004-clear-main-data/spec.md`: especificación del borrado seguro del estado principal.
+- `specs/004-clear-main-data/plan.md`: plan técnico del borrado seguro.
+- `specs/004-clear-main-data/tasks.md`: tareas del borrado seguro.
 
 ## Agentes utilizados en OpenCode
 
@@ -187,6 +191,23 @@ Reglas importantes:
 - Restablecer el objetivo nunca elimina sesiones.
 - Los datos corruptos del objetivo no deben afectar a las sesiones.
 
+### Borrado de sesiones
+
+La aplicación incluye un botón para borrar todas las sesiones de estudio. Antes de
+ejecutarlo se muestra una confirmación explícita e irreversible con esta advertencia
+exacta:
+
+> Vas a borrar todas las sesiones de estudio. Esta acción no se puede deshacer y la copia de seguridad no se borrará. El objetivo semanal se conservará.
+
+La confirmación elimina únicamente las sesiones del documento principal y conserva
+el objetivo semanal. `data/data.backup.json` permanece intacto y nunca se utiliza
+para restaurar automáticamente los datos. La acción no tiene deshacer.
+
+Si el borrado no puede completarse, la aplicación muestra un error general claro y
+no presenta la operación como realizada. Ante una respuesta incierta por
+desconexión o tiempo de espera, no se reintenta automáticamente: hay que recargar
+la página y decidir manualmente si se vuelve a intentar.
+
 ## Lógica de fechas y estadísticas
 
 La lógica se mantiene separada de la interfaz siempre que es posible. Las funciones puras reciben `today` para que sus resultados sean deterministas en los tests.
@@ -263,6 +284,15 @@ Después de cambios visuales o funcionales:
 5. Emular `375 × 812` para móvil.
 6. Confirmar que no existe overflow horizontal.
 7. Comprobar que los datos guardados no se han borrado ni alterado.
+
+Para comprobar manualmente el borrado, se verifica que el botón sea localizable y
+accesible, que la advertencia anterior aparezca antes de confirmar, que cancelar no
+cambie nada y que confirmar deje vacías la lista y las estadísticas de sesiones,
+manteniendo visible el objetivo semanal. También se comprueba que la copia de
+seguridad permanezca intacta, que los errores no anuncien un éxito y que no haya
+reintento automático tras una desconexión o un tiempo de espera. Estas comprobaciones
+se realizan en escritorio y en una vista móvil de 375 × 812, con la consola limpia
+y sin overflow horizontal.
 
 ## Protección de datos
 

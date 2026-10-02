@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { createInitialDataDocument } = require("../app.js");
-const { createRepository, CORRUPTION_MESSAGE, DataReadError } = require("../repository.js");
+const { createRepository, CORRUPTION_MESSAGE, DataReadError, isValidClearRequest, operationFingerprint, buildClearedDocument, deriveBackupPending } = require("../repository.js");
 
 function fixture() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "diario-repository-"));
@@ -43,9 +43,119 @@ test("serializa operaciones, hace idempotencia y rechaza payload conflictivo", a
   assert.equal(first.ok, true);
   assert.equal(second.document.objetivoSemanal, 100);
   assert.deepEqual(await repository.enqueue({ operationId: "op-1", type: "session", payload: { fecha: "2026-10-02", tema: "A", minutos: 20 } }), first);
-  await assert.rejects(repository.enqueue({ operationId: "op-1", type: "session", payload: { fecha: "2026-10-02", tema: "B", minutos: 20 } }), /operationId/);
+  await assert.rejects(repository.enqueue({ operationId: "op-1", type: "session", payload: { fecha: "2026-10-02", tema: "B", minutos: 20 } }), /operación ya existe/);
   assert.equal(repository.read().sesiones.length, 1);
   assert.equal(repository.read().metadata.successfulWrites, 2);
+});
+
+test("valida el contrato raíz exacto de clear-main-data sin depender del orden", () => {
+  const request = { confirmation: "BORRAR TODO", operationId: "clear-1", type: "clear-main-data" };
+  assert.equal(isValidClearRequest(request), true);
+  assert.equal(isValidClearRequest({ type: "clear-main-data", operationId: "clear-1", confirmation: "BORRAR TODO", extra: true }), false);
+  assert.equal(isValidClearRequest({ type: "clear-main-data", operationId: "", confirmation: "BORRAR TODO" }), false);
+  assert.equal(isValidClearRequest({ type: "clear-main-data", operationId: 1, confirmation: "BORRAR TODO" }), false);
+  assert.equal(isValidClearRequest({ type: "clear-main-data", operationId: "clear-1", confirmation: "BORRAR" }), false);
+  assert.equal(isValidClearRequest({ type: "session", operationId: "clear-1", confirmation: "BORRAR TODO" }), false);
+});
+
+test("construye un documento vacío conservando raíz y metadatos", () => {
+  const document = { version: 1, objetivoSemanal: 120,
+    sesiones: [{ fecha: "2026-10-01", tema: "x", minutos: 20, desconocido: true }],
+    metadata: { migration: { status: "pending", sources: [], ignoredSources: [], completedAt: null }, successfulWrites: 7, backupSuccessfulWrites: 1, extra: "m" }, extra: "r" };
+  const result = buildClearedDocument(document);
+  assert.deepEqual(result.document.sesiones, []);
+  assert.equal(result.deletedSessions, 1);
+  assert.equal(result.document.extra, "r");
+  assert.equal(result.document.metadata.extra, "m");
+  assert.equal(deriveBackupPending(result.document), true);
+  assert.equal(document.sesiones.length, 1);
+});
+
+test("clear-main-data vacía sesiones sin contadores ni backup", async () => {
+  const paths = fixture();
+  const document = { version: 1, sesiones: [{ fecha: "2026-10-01", tema: "x", minutos: 20 }], objetivoSemanal: 120,
+    metadata: { migration: { status: "pending", sources: [], ignoredSources: [], completedAt: null }, successfulWrites: 2, backupSuccessfulWrites: 1 } };
+  fs.writeFileSync(paths.file, JSON.stringify(document));
+  fs.writeFileSync(paths.backup, "backup-intacto");
+  const before = fs.readFileSync(paths.backup);
+  const result = await createRepository({ dataFile: paths.file, backupFile: paths.backup }).enqueue({ type: "clear-main-data", operationId: "clear-test", confirmation: "BORRAR TODO" });
+  assert.equal(result.deletedSessions, 1);
+  assert.deepEqual(result.document.sesiones, []);
+  assert.equal(result.document.metadata.successfulWrites, 2);
+  assert.deepEqual(fs.readFileSync(paths.backup), before);
+});
+
+test("clear distingue principal ausente y principal corrupto sin tocar el backup", async () => {
+  for (const kind of ["missing", "corrupt"]) {
+    const paths = fixture();
+    fs.writeFileSync(paths.backup, "backup-byte-a-byte");
+    if (kind === "corrupt") fs.writeFileSync(paths.file, "");
+    const repository = createRepository({ dataFile: paths.file, backupFile: paths.backup });
+    await assert.rejects(repository.enqueue({ type: "clear-main-data", operationId: kind, confirmation: "BORRAR TODO" }), error =>
+      error.code === (kind === "missing" ? "MAIN_DATA_MISSING" : "DATA_CORRUPT"));
+    assert.deepEqual(fs.readFileSync(paths.backup), Buffer.from("backup-byte-a-byte"));
+    assert.equal(kind === "missing" ? fs.existsSync(paths.file) : fs.readFileSync(paths.file, "utf8"), kind === "missing" ? false : "");
+  }
+});
+
+test("clear acepta cero sesiones y objetivo ausente es corrupción", async () => {
+  const paths = fixture();
+  const document = createInitialDataDocument();
+  fs.writeFileSync(paths.file, JSON.stringify(document));
+  const repository = createRepository({ dataFile: paths.file });
+  const result = await repository.enqueue({ type: "clear-main-data", operationId: "empty", confirmation: "BORRAR TODO" });
+  assert.equal(result.deletedSessions, 0);
+  assert.equal(result.document.metadata.successfulWrites, document.metadata.successfulWrites);
+  const broken = { ...document }; delete broken.objetivoSemanal;
+  fs.writeFileSync(paths.file, JSON.stringify(broken));
+  await assert.rejects(repository.enqueue({ type: "clear-main-data", operationId: "no-goal", confirmation: "BORRAR TODO" }), error => error.code === "DATA_CORRUPT");
+});
+
+test("clear no lee ni modifica backup válido, antiguo, corrupto o ausente", async () => {
+  for (const backup of [null, "corrupto", JSON.stringify(createInitialDataDocument()), JSON.stringify({ ...createInitialDataDocument(), sesiones: [{ fecha: "2020-01-01", tema: "antigua", minutos: 1 }] })]) {
+    const paths = fixture(); fs.writeFileSync(paths.file, JSON.stringify(createInitialDataDocument()));
+    if (backup !== null) fs.writeFileSync(paths.backup, backup);
+    const before = backup === null ? null : fs.readFileSync(paths.backup);
+    await createRepository({ dataFile: paths.file, backupFile: paths.backup }).enqueue({ type: "clear-main-data", operationId: `b-${String(backup)}`, confirmation: "BORRAR TODO" });
+    assert.equal(backup === null ? fs.existsSync(paths.backup) : Buffer.compare(before, fs.readFileSync(paths.backup)), backup === null ? false : 0);
+  }
+});
+
+test("clear diferencia fallo de escritura y conserva resultado sin rollback tras fallo de validación", async () => {
+  const paths = fixture(); fs.writeFileSync(paths.file, JSON.stringify(createInitialDataDocument()));
+  const originalWrite = fs.writeFileSync;
+  fs.writeFileSync = (file, ...args) => { if (file.includes(".tmp")) throw new Error("fallo"); return originalWrite(file, ...args); };
+  try {
+    const repository = createRepository({ dataFile: paths.file });
+    await assert.rejects(repository.enqueue({ type: "clear-main-data", operationId: "write-fail", confirmation: "BORRAR TODO" }), e => e.code === "CLEAR_WRITE_FAILED");
+  } finally { fs.writeFileSync = originalWrite; }
+});
+
+test("clear memoriza repetición y devuelve conflicto exacto", async () => {
+  const paths = fixture(); const repository = createRepository({ dataFile: paths.file });
+  repository.read();
+  const request = { type: "clear-main-data", operationId: "same", confirmation: "BORRAR TODO" };
+  const first = await repository.enqueue(request);
+  assert.deepEqual(await repository.enqueue({ confirmation: request.confirmation, operationId: request.operationId, type: request.type }), first);
+  await assert.rejects(repository.enqueue({ ...request, confirmation: "otra" }), e => e.code === "IDEMPOTENCY_CONFLICT" && e.message === "La operación ya existe con otros datos.");
+});
+
+test("el fingerprint de clear ignora orden, prototipo y propiedades no enumerables", () => {
+  const first = { type: "clear-main-data", operationId: "clear-1", confirmation: "BORRAR TODO" };
+  const second = { confirmation: "BORRAR TODO", operationId: "clear-1", type: "clear-main-data" };
+  Object.defineProperty(second, "hidden", { value: "ignored", enumerable: false });
+  Object.setPrototypeOf(second, { extra: "ignored" });
+  assert.equal(operationFingerprint(first), operationFingerprint(second));
+  assert.notEqual(operationFingerprint(first), operationFingerprint({ ...first, operationId: "clear-2" }));
+});
+
+test("rechaza contratos clear inválidos sin mutar ni crear datos", async () => {
+  const paths = fixture();
+  const repository = createRepository({ dataFile: paths.file, backupFile: paths.backup });
+  const invalid = { type: "clear-main-data", operationId: "clear-1", confirmation: "no", extra: true };
+  await assert.rejects(repository.enqueue(invalid), /confirmación de borrado/);
+  assert.equal(fs.existsSync(paths.file), false);
+  assert.equal(fs.existsSync(paths.backup), false);
 });
 
 test("restablecer objetivo exige confirmación exacta y conserva sesiones", async () => {

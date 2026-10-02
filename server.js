@@ -17,6 +17,14 @@ function sendJson(response, status, body) {
   response.end(JSON.stringify(body));
 }
 
+const CLEAR_ERROR_STATUS = {
+  INVALID_CLEAR_REQUEST: 400,
+  IDEMPOTENCY_CONFLICT: 409,
+  MAIN_DATA_MISSING: 404,
+  DATA_CORRUPT: 503,
+  CLEAR_WRITE_FAILED: 503
+};
+
 function createServer({ repository = createRepository() } = {}) {
   return http.createServer((request, response) => {
     const url = new URL(request.url, "http://localhost");
@@ -36,9 +44,21 @@ function createServer({ repository = createRepository() } = {}) {
         try {
           const operation = JSON.parse(body);
           const result = await repository.enqueue(operation);
-          sendJson(response, 200, result);
+          if (operation && operation.type === "clear-main-data") {
+            sendJson(response, 200, {
+              ok: true,
+              deletedSessions: result.deletedSessions,
+              backupPending: result.backupPending
+            });
+          } else {
+            sendJson(response, 200, result);
+          }
         } catch (error) {
-          sendJson(response, 503, { ok: false, error: error.message || "No se han podido guardar los datos. Inténtalo de nuevo." });
+          if (error.code && CLEAR_ERROR_STATUS[error.code]) {
+            sendJson(response, CLEAR_ERROR_STATUS[error.code], { ok: false, code: error.code, message: error.message });
+          } else {
+            sendJson(response, 503, { ok: false, error: error.message || "No se han podido guardar los datos. Inténtalo de nuevo." });
+          }
         }
       });
       return;

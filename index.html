@@ -93,12 +93,30 @@
       </form>
     </section>
 
+    <section class="tarjeta tarjeta-peligro" aria-labelledby="titulo-borrado">
+      <h2 id="titulo-borrado">Borrar sesiones</h2>
+      <p>Elimina todas las sesiones de estudio. Esta acción no se puede deshacer.</p>
+      <button class="boton boton-peligro" type="button" id="abrir-borrado">Borrar todas las sesiones</button>
+    </section>
+
     <section class="sesiones">
       <h2>Sesiones</h2>
       <p id="sin-sesiones" class="vacio">Todavía no hay sesiones registradas.</p>
       <ul id="lista-sesiones"></ul>
     </section>
   </main>
+  <div class="dialogo-capa" id="dialogo-borrado-capa" hidden>
+    <section class="dialogo-borrado" id="dialogo-borrado" role="alertdialog" aria-modal="true"
+      aria-labelledby="titulo-confirmar-borrado" aria-describedby="advertencia-borrado" tabindex="-1">
+      <h2 id="titulo-confirmar-borrado">Confirmar borrado de sesiones</h2>
+      <p id="advertencia-borrado">Vas a borrar todas las sesiones de estudio. Esta acción no se puede deshacer y la copia de seguridad no se borrará. El objetivo semanal se conservará.</p>
+      <div class="dialogo-acciones">
+        <button class="boton boton-peligro" type="button" id="confirmar-borrado">Borrar todas las sesiones</button>
+        <button class="boton boton-secundario" type="button" id="cancelar-borrado">Cancelar</button>
+      </div>
+    </section>
+  </div>
+  <p id="resultado-borrado" class="resultado-borrado" role="status" aria-live="polite" aria-atomic="true"></p>
   <script src="app.js"></script>
 </body>
 </html>

@@ -11,7 +11,15 @@ const {
   , loadWeeklyGoal
   , saveWeeklyGoal
   , resetWeeklyGoal
+  , validateClearResponse
 } = require("../app.js");
+
+test("valida respuestas de borrado y rechaza formas desconocidas", () => {
+  assert.deepEqual(validateClearResponse({ ok: true, deletedSessions: 2, backupPending: false }), { ok: true, deletedSessions: 2, backupPending: false });
+  assert.equal(validateClearResponse({ ok: true, deletedSessions: -1, backupPending: false }).code, "UNEXPECTED_RESPONSE");
+  assert.equal(validateClearResponse({ ok: false, code: "DATA_CORRUPT", message: "No se pueden leer los datos. Conserva una copia del archivo y corrígelo antes de continuar." }).ok, false);
+  assert.equal(validateClearResponse({ ok: false, code: "DATA_CORRUPT", message: "otro" }).code, "UNEXPECTED_RESPONSE");
+});
 
 function storage(initial = {}) {
   const data = { ...initial };

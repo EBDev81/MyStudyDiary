@@ -15,6 +15,12 @@ const goalView = document.querySelector("#objetivo-vista");
 const goalError = document.querySelector("#objetivo-error");
 const goalMessage = document.querySelector("#objetivo-mensaje");
 const resetGoalButton = document.querySelector("#restablecer-objetivo");
+const openClearButton = document.querySelector("#abrir-borrado");
+const clearDialogLayer = document.querySelector("#dialogo-borrado-capa");
+const clearDialog = document.querySelector("#dialogo-borrado");
+const confirmClearButton = document.querySelector("#confirmar-borrado");
+const cancelClearButton = document.querySelector("#cancelar-borrado");
+const clearResult = document.querySelector("#resultado-borrado");
 const API_TIMEOUT = 8000;
 const CONNECTION_MESSAGE = "No se puede conectar con el servidor.";
 const TIMEOUT_MESSAGE = "La conexión ha tardado demasiado. Recarga la página o inténtalo de nuevo.";
@@ -23,6 +29,85 @@ const CORRUPTION_MESSAGE = "No se pueden leer los datos. Conserva una copia del 
 
 let sesiones = [];
 let documento = null;
+let clearDialogReturnFocus = null;
+let clearInProgress = false;
+let backupPending = false;
+const CLEAR_UNEXPECTED = { ok: false, code: "UNEXPECTED_RESPONSE", message: "No se pudo confirmar la respuesta del borrado. Recarga la página antes de intentarlo de nuevo." };
+const CLEAR_UNCERTAIN = "No se puede confirmar si los datos se han borrado. Recarga la página antes de intentarlo de nuevo.";
+const CLEAR_ERROR_CODES = new Set(["INVALID_CLEAR_REQUEST", "IDEMPOTENCY_CONFLICT", "MAIN_DATA_MISSING", "DATA_CORRUPT", "CLEAR_WRITE_FAILED"]);
+const CLEAR_ERROR_MESSAGES = {
+  INVALID_CLEAR_REQUEST: "La confirmación de borrado no es válida.",
+  IDEMPOTENCY_CONFLICT: "La operación ya existe con otros datos.",
+  MAIN_DATA_MISSING: "No se pueden borrar los datos porque no existe el archivo principal.",
+  DATA_CORRUPT: "No se pueden leer los datos. Conserva una copia del archivo y corrígelo antes de continuar.",
+  CLEAR_WRITE_FAILED: "No se han podido borrar los datos. Inténtalo de nuevo."
+};
+
+function validateClearResponse(result) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) return CLEAR_UNEXPECTED;
+  if (result.ok === true) {
+    if (!Number.isSafeInteger(result.deletedSessions) || result.deletedSessions < 0 || typeof result.backupPending !== "boolean") return CLEAR_UNEXPECTED;
+    return result;
+  }
+  if (result.ok === false && typeof result.code === "string" && CLEAR_ERROR_CODES.has(result.code) && result.message === CLEAR_ERROR_MESSAGES[result.code]) return result;
+  return CLEAR_UNEXPECTED;
+}
+
+function setClearControlsDisabled(disabled) {
+  clearInProgress = disabled;
+  [openClearButton, confirmClearButton, cancelClearButton, resetGoalButton].forEach(control => { control.disabled = disabled; });
+  [formulario, goalForm].forEach(form => { form.inert = disabled; });
+  if (disabled) confirmClearButton.textContent = "Borrado en curso…";
+  else confirmClearButton.textContent = "Borrar todas las sesiones";
+}
+
+function finishClear(message, additionalMessage = "") {
+  clearResult.textContent = additionalMessage ? `${message} ${additionalMessage}` : message;
+  closeClearDialog();
+  setClearControlsDisabled(false);
+  openClearButton.focus();
+}
+
+function closeClearDialog() {
+  clearDialogLayer.hidden = true;
+  const returnFocus = clearDialogReturnFocus;
+  clearDialogReturnFocus = null;
+  if (returnFocus && typeof returnFocus.focus === "function") returnFocus.focus();
+}
+
+openClearButton.addEventListener("click", () => {
+  if (clearInProgress) return;
+  clearDialogReturnFocus = openClearButton;
+  clearDialogLayer.hidden = false;
+  confirmClearButton.focus();
+});
+
+cancelClearButton.addEventListener("click", () => {
+  if (clearInProgress) return;
+  setClearControlsDisabled(false);
+  closeClearDialog();
+});
+confirmClearButton.addEventListener("click", () => {
+  if (clearInProgress) return;
+  setClearControlsDisabled(true);
+  enviarBorrado().then(result => {
+    if (result.uncertain) finishClear(CLEAR_UNCERTAIN);
+    else if (result.ok) {
+      cargarDatos().then((reloaded) => {
+        const successMessage = `Se han borrado ${result.deletedSessions} sesiones. La copia de seguridad se ha conservado.`;
+        if (reloaded.ok) finishClear(successMessage);
+        else finishClear(successMessage, reloaded.error);
+      });
+    }
+    else finishClear(result.message);
+  });
+});
+clearDialog.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    if (!clearInProgress) closeClearDialog();
+  }
+});
 
 async function cargarDatos() {
   const controller = new AbortController();
@@ -32,12 +117,16 @@ async function cargarDatos() {
     const result = await response.json();
     if (!response.ok || !result.ok) throw new Error(result.error || CONNECTION_MESSAGE);
     documento = result.data;
+    backupPending = deriveBackupPending(documento);
     sesiones = documento.sesiones.slice();
     fecha.value = fechaLocal(new Date());
     mostrar();
     renderWeeklyGoal();
+    return { ok: true };
   } catch (error) {
-    mostrarError(error.name === "AbortError" ? TIMEOUT_MESSAGE : (error.message || CONNECTION_MESSAGE));
+    const message = error.name === "AbortError" ? TIMEOUT_MESSAGE : (error.message || CONNECTION_MESSAGE);
+    mostrarError(message);
+    return { ok: false, error: message };
   } finally {
     clearTimeout(timeout);
   }
@@ -144,8 +233,29 @@ function enviarOperacion(type, payload) {
     .finally(() => clearTimeout(timeout));
 }
 
+function enviarBorrado() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT);
+  const operation = { type: "clear-main-data", operationId: `clear-main-data-${Date.now()}-${Math.random()}`, confirmation: "BORRAR TODO" };
+  return fetch("/api/operations", { method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal, body: JSON.stringify(operation) })
+    .then(async response => {
+      let body;
+      try { body = await response.json(); } catch { return CLEAR_UNEXPECTED; }
+      const result = validateClearResponse(body);
+      return result;
+    })
+    .catch(error => ({ uncertain: error.name === "AbortError" || error.name === "TypeError" }))
+    .finally(() => clearTimeout(timeout));
+}
+
 function mostrarAvisoBackup(result) {
   if (result.backupPending) mostrarError("La copia de seguridad está pendiente. Los datos principales se han guardado.");
+}
+
+function deriveBackupPending(data) {
+  const metadata = data && data.metadata;
+  if (!metadata || !Number.isSafeInteger(metadata.successfulWrites) || !Number.isSafeInteger(metadata.backupSuccessfulWrites)) return false;
+  return metadata.successfulWrites - metadata.backupSuccessfulWrites >= 5;
 }
 
 function mostrar() {
@@ -174,6 +284,20 @@ function actualizarRacha() {
   renderHeatMap(sesiones, hoy);
 }
 
+}
+
+// Mantiene la validación disponible también para las pruebas sin DOM.
+function validateClearResponse(result) {
+    const messages = {
+      INVALID_CLEAR_REQUEST: "La confirmación de borrado no es válida.",
+      IDEMPOTENCY_CONFLICT: "La operación ya existe con otros datos.",
+      MAIN_DATA_MISSING: "No se pueden borrar los datos porque no existe el archivo principal.",
+      DATA_CORRUPT: "No se pueden leer los datos. Conserva una copia del archivo y corrígelo antes de continuar.",
+      CLEAR_WRITE_FAILED: "No se han podido borrar los datos. Inténtalo de nuevo."
+    };
+    if (result && result.ok === true && Number.isSafeInteger(result.deletedSessions) && result.deletedSessions >= 0 && typeof result.backupPending === "boolean") return result;
+    if (result && result.ok === false && messages[result.code] === result.message) return result;
+    return { ok: false, code: "UNEXPECTED_RESPONSE", message: "No se pudo confirmar la respuesta del borrado. Recarga la página antes de intentarlo de nuevo." };
 }
 
 function calculateCurrentStreak(sessions, today) {
@@ -542,6 +666,8 @@ if (typeof module !== "undefined") {
      , normalizeSession
      , getTodayLocal
      , formatLocalDate
-     , parseLocalDate
-     };
+      , parseLocalDate
+       , validateClearResponse
+       , deriveBackupPending
+      };
 }
