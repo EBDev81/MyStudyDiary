@@ -4,6 +4,8 @@
 
 Diario de Estudio es una aplicación educativa para registrar sesiones de estudio y convertir el esfuerzo diario en señales visuales de progreso. Su objetivo es que una persona pueda apuntar qué ha estudiado, cuánto tiempo ha dedicado y comprobar si mantiene la constancia.
 
+Repositorio: [github.com/EBDev81/MyStudyDiary](https://github.com/EBDev81/MyStudyDiary)
+
 <img width="962" height="348" alt="image" src="https://github.com/user-attachments/assets/7879c53b-0c46-4dff-a846-002b4b1c6f0a" />
 <img width="916" height="432" alt="image" src="https://github.com/user-attachments/assets/dd43d6c6-58e3-486f-aa1c-ad9b0a3c1dbd" />
 <img width="914" height="290" alt="image" src="https://github.com/user-attachments/assets/18e26823-2b0c-4e21-8686-e5aba5498c03" />
@@ -18,6 +20,9 @@ La aplicación está pensada para alguien que empieza a programar: no depende de
 - Registrar una sesión con fecha, tema y minutos.
 - Editar la fecha para registrar sesiones anteriores.
 - Mostrar las sesiones ordenadas de la más reciente a la más antigua.
+- Mostrar como máximo diez sesiones por página, con controles `<< < > >>`.
+- Navegar mediante una ventana consecutiva de hasta cinco números de página, que siempre incluye la página actual.
+  Ejemplos literales de ventanas: `1 2 3 4 5`, `4 5 6 7 8` y `6 7 8 9 10`.
 - Calcular la racha actual de días consecutivos.
 - Calcular la mejor racha histórica.
 - Mostrar los minutos estudiados de la semana actual.
@@ -365,6 +370,11 @@ Para comprobar manualmente el borrado:
 8. Confirmar que no existe reintento automático tras una desconexión o tiempo de espera.
 9. Repetir las comprobaciones en escritorio y en una vista móvil de `375 × 812`.
 10. Confirmar que la consola permanece limpia y que no existe overflow horizontal.
+
+Para la lista paginada, comprobar además con teclado que el foco sigue el botón de la página activa,
+que los límites están desactivados y que se anuncia «Página X de Y». En escritorio y en móvil de
+`375 × 812`, verificar que el desplazamiento ocurre solo dentro de los controles de paginación y que
+los botones mantienen un objetivo táctil mínimo de 44 × 44 CSS px.
 
 ## Protección de datos
 

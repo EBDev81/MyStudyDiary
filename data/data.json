@@ -165,6 +165,256 @@
       "fecha": "2026-10-02",
       "tema": "Comprobación del mapa de calor",
       "minutos": 55
+    },
+    {
+      "fecha": "2026-05-02",
+      "tema": "Comprensión lectora",
+      "minutos": 25
+    },
+    {
+      "fecha": "2026-05-05",
+      "tema": "Álgebra básica",
+      "minutos": 35
+    },
+    {
+      "fecha": "2026-05-08",
+      "tema": "Inglés conversacional",
+      "minutos": 45
+    },
+    {
+      "fecha": "2026-05-11",
+      "tema": "Historia contemporánea",
+      "minutos": 55
+    },
+    {
+      "fecha": "2026-05-14",
+      "tema": "Biología celular",
+      "minutos": 65
+    },
+    {
+      "fecha": "2026-05-17",
+      "tema": "Redacción académica",
+      "minutos": 75
+    },
+    {
+      "fecha": "2026-05-20",
+      "tema": "Geometría",
+      "minutos": 85
+    },
+    {
+      "fecha": "2026-05-23",
+      "tema": "Vocabulario técnico",
+      "minutos": 95
+    },
+    {
+      "fecha": "2026-05-26",
+      "tema": "Química orgánica",
+      "minutos": 25
+    },
+    {
+      "fecha": "2026-05-29",
+      "tema": "Técnicas de memoria",
+      "minutos": 35
+    },
+    {
+      "fecha": "2026-06-01",
+      "tema": "Análisis de textos",
+      "minutos": 45
+    },
+    {
+      "fecha": "2026-06-04",
+      "tema": "Programación estructurada",
+      "minutos": 55
+    },
+    {
+      "fecha": "2026-06-07",
+      "tema": "Repaso de conceptos",
+      "minutos": 65
+    },
+    {
+      "fecha": "2026-06-10",
+      "tema": "Ejercicios de razonamiento",
+      "minutos": 75
+    },
+    {
+      "fecha": "2026-06-13",
+      "tema": "Comprensión lectora",
+      "minutos": 85
+    },
+    {
+      "fecha": "2026-06-16",
+      "tema": "Álgebra básica",
+      "minutos": 95
+    },
+    {
+      "fecha": "2026-06-19",
+      "tema": "Inglés conversacional",
+      "minutos": 25
+    },
+    {
+      "fecha": "2026-06-22",
+      "tema": "Historia contemporánea",
+      "minutos": 35
+    },
+    {
+      "fecha": "2026-06-25",
+      "tema": "Biología celular",
+      "minutos": 45
+    },
+    {
+      "fecha": "2026-06-28",
+      "tema": "Redacción académica",
+      "minutos": 55
+    },
+    {
+      "fecha": "2026-07-01",
+      "tema": "Geometría",
+      "minutos": 65
+    },
+    {
+      "fecha": "2026-07-04",
+      "tema": "Vocabulario técnico",
+      "minutos": 75
+    },
+    {
+      "fecha": "2026-07-07",
+      "tema": "Química orgánica",
+      "minutos": 85
+    },
+    {
+      "fecha": "2026-07-10",
+      "tema": "Técnicas de memoria",
+      "minutos": 95
+    },
+    {
+      "fecha": "2026-07-13",
+      "tema": "Análisis de textos",
+      "minutos": 25
+    },
+    {
+      "fecha": "2026-07-16",
+      "tema": "Programación estructurada",
+      "minutos": 35
+    },
+    {
+      "fecha": "2026-07-19",
+      "tema": "Repaso de conceptos",
+      "minutos": 45
+    },
+    {
+      "fecha": "2026-04-01",
+      "tema": "Debate y argumentación",
+      "minutos": 30
+    },
+    {
+      "fecha": "2026-05-01",
+      "tema": "Cálculo mental",
+      "minutos": 45
+    },
+    {
+      "fecha": "2026-04-02",
+      "tema": "Ciencias de la Tierra",
+      "minutos": 60
+    },
+    {
+      "fecha": "2026-06-02",
+      "tema": "Gramática española",
+      "minutos": 75
+    },
+    {
+      "fecha": "2026-04-03",
+      "tema": "Economía básica",
+      "minutos": 90
+    },
+    {
+      "fecha": "2026-05-03",
+      "tema": "Mapas conceptuales",
+      "minutos": 105
+    },
+    {
+      "fecha": "2026-06-03",
+      "tema": "Física mecánica",
+      "minutos": 120
+    },
+    {
+      "fecha": "2026-04-04",
+      "tema": "Planificación del estudio",
+      "minutos": 30
+    },
+    {
+      "fecha": "2026-05-04",
+      "tema": "Debate y argumentación",
+      "minutos": 45
+    },
+    {
+      "fecha": "2026-04-05",
+      "tema": "Cálculo mental",
+      "minutos": 60
+    },
+    {
+      "fecha": "2026-06-05",
+      "tema": "Ciencias de la Tierra",
+      "minutos": 75
+    },
+    {
+      "fecha": "2026-04-06",
+      "tema": "Gramática española",
+      "minutos": 90
+    },
+    {
+      "fecha": "2026-05-06",
+      "tema": "Economía básica",
+      "minutos": 105
+    },
+    {
+      "fecha": "2026-06-06",
+      "tema": "Mapas conceptuales",
+      "minutos": 120
+    },
+    {
+      "fecha": "2026-04-07",
+      "tema": "Física mecánica",
+      "minutos": 30
+    },
+    {
+      "fecha": "2026-05-07",
+      "tema": "Planificación del estudio",
+      "minutos": 45
+    },
+    {
+      "fecha": "2026-04-08",
+      "tema": "Debate y argumentación",
+      "minutos": 60
+    },
+    {
+      "fecha": "2026-06-08",
+      "tema": "Cálculo mental",
+      "minutos": 75
+    },
+    {
+      "fecha": "2026-04-09",
+      "tema": "Ciencias de la Tierra",
+      "minutos": 90
+    },
+    {
+      "fecha": "2026-05-09",
+      "tema": "Gramática española",
+      "minutos": 105
+    },
+    {
+      "fecha": "2026-06-09",
+      "tema": "Economía básica",
+      "minutos": 120
+    },
+    {
+      "fecha": "2026-04-10",
+      "tema": "Mapas conceptuales",
+      "minutos": 30
+    },
+    {
+      "fecha": "2026-05-10",
+      "tema": "Física mecánica",
+      "minutos": 45
     }
   ],
   "objetivoSemanal": 300,

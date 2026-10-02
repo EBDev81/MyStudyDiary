@@ -21,6 +21,9 @@ const clearDialog = document.querySelector("#dialogo-borrado");
 const confirmClearButton = document.querySelector("#confirmar-borrado");
 const cancelClearButton = document.querySelector("#cancelar-borrado");
 const clearResult = document.querySelector("#resultado-borrado");
+const pagination = document.querySelector(".paginacion");
+const paginationAnnouncement = document.querySelector("#paginacion-anuncio");
+const paginationControls = document.querySelector(".paginacion-controles");
 const API_TIMEOUT = 8000;
 const CONNECTION_MESSAGE = "No se puede conectar con el servidor.";
 const TIMEOUT_MESSAGE = "La conexión ha tardado demasiado. Recarga la página o inténtalo de nuevo.";
@@ -32,6 +35,7 @@ let documento = null;
 let clearDialogReturnFocus = null;
 let clearInProgress = false;
 let backupPending = false;
+let paginaActual = 1;
 const CLEAR_UNEXPECTED = { ok: false, code: "UNEXPECTED_RESPONSE", message: "No se pudo confirmar la respuesta del borrado. Recarga la página antes de intentarlo de nuevo." };
 const CLEAR_UNCERTAIN = "No se puede confirmar si los datos se han borrado. Recarga la página antes de intentarlo de nuevo.";
 const CLEAR_ERROR_CODES = new Set(["INVALID_CLEAR_REQUEST", "IDEMPOTENCY_CONFLICT", "MAIN_DATA_MISSING", "DATA_CORRUPT", "CLEAR_WRITE_FAILED"]);
@@ -158,6 +162,7 @@ formulario.addEventListener("submit", (evento) => {
     documento = result.document;
     mostrarAvisoBackup(result);
     sesiones = documento.sesiones.slice();
+    paginaActual = 1;
     formulario.reset();
     fecha.value = fechaLocal(new Date());
     mostrar();
@@ -259,10 +264,13 @@ function deriveBackupPending(data) {
 }
 
 function mostrar() {
-  sesiones.sort((a, b) => b.fecha.localeCompare(a.fecha) || b.creado - a.creado);
+  const view = buildSessionPaginationView(sesiones, paginaActual);
+  // Una recarga que deja la colección vacía debe conservar el estado vacío
+  // (página 0), no inventar una página 1.
+  paginaActual = view.currentPage;
   lista.innerHTML = "";
   sinSesiones.hidden = sesiones.length > 0;
-  sesiones.forEach((sesion) => {
+  view.pageItems.forEach((sesion) => {
     const elemento = document.createElement("li");
     elemento.innerHTML = `<div><div class="tema"></div><div class="detalle"></div></div><span class="minutos"></span>`;
     elemento.querySelector(".tema").textContent = sesion.tema;
@@ -270,8 +278,68 @@ function mostrar() {
     elemento.querySelector(".minutos").textContent = `${sesion.minutos} min`;
     lista.appendChild(elemento);
   });
+  renderPagination(view);
   actualizarRacha();
 }
+
+function renderPagination(view) {
+  if (!pagination || !paginationControls || !paginationAnnouncement) return;
+  pagination.hidden = view.totalPages === 0;
+  if (view.totalPages === 0) {
+    paginationAnnouncement.textContent = "";
+    return;
+  }
+
+  paginationAnnouncement.textContent = `Página ${view.currentPage} de ${view.totalPages}`;
+  paginationControls.innerHTML = "";
+    const addButton = (label, accessibleLabel, targetPage, disabled = false, current = false) => {
+    const button = document.createElement("button");
+    button.className = "paginacion-boton";
+    button.type = "button";
+    button.textContent = label;
+    button.setAttribute("aria-label", accessibleLabel);
+      button.disabled = disabled;
+      if (current) button.setAttribute("aria-current", "page");
+      button.dataset.page = String(targetPage);
+      // El clic es el mismo camino para ratón, tacto y activación por teclado.
+      button.addEventListener("click", () => handlePageChange(targetPage));
+      paginationControls.appendChild(button);
+    };
+    addButton("<<", "Primera página", 1, !view.hasPrevious);
+    addButton("<", "Página anterior", view.currentPage - 1, !view.hasPrevious);
+    view.visiblePages.forEach(page => addButton(String(page), `Página ${page}`, page, false, page === view.currentPage));
+    addButton(">", "Página siguiente", view.currentPage + 1, !view.hasNext);
+    addButton(">>", "Última página", view.totalPages, !view.hasNext);
+    if (paginationControls.dataset.focusPage) {
+      const active = paginationControls.querySelector(`[data-page="${paginationControls.dataset.focusPage}"]`);
+      delete paginationControls.dataset.focusPage;
+      if (active) {
+        active.focus();
+        ensurePaginationButtonVisible(active);
+      }
+    }
+  }
+
+  function ensurePaginationButtonVisible(button) {
+    const containerRect = paginationControls.getBoundingClientRect();
+    const styles = getComputedStyle(paginationControls);
+    const innerLeft = containerRect.left + parseFloat(styles.borderLeftWidth || 0);
+    const innerRight = containerRect.right - parseFloat(styles.borderRightWidth || 0);
+    const buttonRect = button.getBoundingClientRect();
+    if (buttonRect.left < innerLeft) {
+      paginationControls.scrollLeft -= innerLeft - buttonRect.left;
+    } else if (buttonRect.right > innerRight) {
+      paginationControls.scrollLeft += buttonRect.right - innerRight;
+    }
+  }
+
+  function handlePageChange(targetPage) {
+    const view = buildSessionPaginationView(sesiones, paginaActual);
+    if (!Number.isSafeInteger(targetPage) || !view.totalPages || targetPage < 1 || targetPage > view.totalPages || targetPage === view.currentPage) return;
+    paginaActual = targetPage;
+    paginationControls.dataset.focusPage = String(targetPage);
+    mostrar();
+  }
 
 function actualizarRacha() {
   const hoy = new Date();
@@ -455,6 +523,29 @@ function normalizeSession(record) {
   const session = { fecha, tema, minutos };
   if (Number.isSafeInteger(record.creado) && record.creado > 0) session.creado = record.creado;
   return session;
+}
+
+function buildSessionPaginationView(sesiones, paginaSolicitada) {
+  const emptyView = { pageItems: [], visiblePages: [], totalPages: 0, currentPage: 0, hasPrevious: false, hasNext: false };
+  if (!Array.isArray(sesiones)) return emptyView;
+  const isNormalized = (record) => record && typeof record === "object" && !Array.isArray(record)
+    && isValidLocalDateText(record.fecha) && typeof record.tema === "string"
+    && isValidSessionMinutes(record.minutos)
+    && (record.creado === undefined || (Number.isSafeInteger(record.creado) && record.creado > 0));
+  if (!sesiones.every(isNormalized)) return emptyView;
+  const ordered = sesiones.map((item, index) => ({ item, index })).sort((a, b) =>
+    b.item.fecha.localeCompare(a.item.fecha)
+    || ((b.item.creado !== undefined ? 1 : 0) - (a.item.creado !== undefined ? 1 : 0))
+    || (b.item.creado !== undefined ? b.item.creado - a.item.creado : 0)
+    || a.index - b.index).map(entry => entry.item);
+  const totalPages = Math.ceil(ordered.length / 10);
+  const requested = Number.isSafeInteger(paginaSolicitada) && paginaSolicitada >= 1 ? paginaSolicitada : 1;
+  const currentPage = Math.min(requested, totalPages);
+  const start = (currentPage - 1) * 10;
+  const visibleStart = totalPages <= 5 ? 1 : Math.min(Math.max(1, currentPage - 2), totalPages - 4);
+  return { pageItems: ordered.slice(start, start + 10), currentPage, totalPages,
+    visiblePages: Array.from({ length: Math.min(5, totalPages) }, (_, i) => visibleStart + i),
+    hasPrevious: currentPage > 1, hasNext: currentPage < totalPages };
 }
 
 function createInitialDataDocument() {
@@ -663,11 +754,12 @@ if (typeof module !== "undefined") {
      , createInitialDataDocument
      , mergeMigrationSources
      , validateDataDocument
-     , normalizeSession
+      , normalizeSession
+      , buildSessionPaginationView
      , getTodayLocal
      , formatLocalDate
       , parseLocalDate
        , validateClearResponse
        , deriveBackupPending
-      };
+        };
 }
