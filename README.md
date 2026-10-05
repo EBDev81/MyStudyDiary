@@ -87,6 +87,9 @@ El proyecto utiliza Specification-Driven Development (SDD): primero se define qu
 - `specs/004-clear-main-data/spec.md`: especificación del borrado seguro del estado principal.
 - `specs/004-clear-main-data/plan.md`: plan técnico del borrado seguro.
 - `specs/004-clear-main-data/tasks.md`: tareas del borrado seguro.
+- `specs/005-session-pagination/spec.md`: especificación de la paginación de sesiones.
+- `specs/005-session-pagination/plan.md`: plan técnico de la paginación.
+- `specs/005-session-pagination/tasks.md`: tareas de la paginación.
 
 ## Agentes utilizados en OpenCode
 
@@ -285,7 +288,6 @@ repository.js
    ↓
 data/data.json
 ```
-
 También se incorporó:
 
 - Backup mediante `data/data.backup.json`.
@@ -305,6 +307,20 @@ El borrado:
 - No elimina el backup.
 - No realiza restauraciones automáticas.
 - No se reintenta automáticamente en caso de respuesta incierta.
+
+
+### Paginación de sesiones — spec 005
+
+Se añadió paginación a la lista de sesiones para mejorar la navegación cuando existe un volumen elevado de registros.
+
+La paginación:
+
+- Muestra 10 sesiones por página.
+- Incluye controles de navegación entre páginas.
+- Limita a 5 el número de páginas visibles simultáneamente.
+- Mantiene la accesibilidad de los controles.
+- Conserva el diseño responsive en escritorio y móvil.
+- Se integra con la ordenación existente de sesiones de más reciente a más antigua.
 
 ## Comandos y workflow SDD
 
