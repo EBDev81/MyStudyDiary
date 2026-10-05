@@ -1,5 +1,5 @@
 --- 
-Name: local-dates 
+name: local-dates 
 description: Úsala siempre que escribas, modifiques o revises código que trabaje con fechas, días, semanas o rachas en el Diario de Estudio. 
 --- 
 # Fechas locales en el Diario de Estudio 
