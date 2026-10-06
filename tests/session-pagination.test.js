@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { buildSessionPaginationView } = require("../app.js");
+const { buildSessionPaginationView, findSessionPage } = require("../app.js");
 
 test("la estructura HTML reserva una paginación accesible", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
@@ -98,6 +98,14 @@ test("ordena por fecha, creado válido descendente y desempate estable", () => {
   assert.strictEqual(view.pageItems[0], second);
   assert.strictEqual(view.pageItems[5], sameB);
   assert.deepEqual(input, before);
+});
+
+test("desempata por id descendente y localiza la página de una sesión editada", () => {
+  const items = Array.from({ length: 21 }, (_, index) => session("2026-02-01", 10, { id: index + 1 }));
+  assert.deepEqual(buildSessionPaginationView(items, 1).pageItems.map(item => item.id), [21, 20, 19, 18, 17, 16, 15, 14, 13, 12]);
+  assert.equal(findSessionPage(items, 1), 3);
+  assert.equal(findSessionPage(items, 21), 1);
+  assert.equal(findSessionPage(items, 999), 1);
 });
 
 test("mantiene referencias, máximo diez y rechaza entradas inválidas sin mutar", () => {

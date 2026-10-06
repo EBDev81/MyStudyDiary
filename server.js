@@ -1,7 +1,7 @@
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
-const { createRepository, DataReadError, CORRUPTION_MESSAGE } = require("./repository.js");
+const { createRepository, DataReadError, CORRUPTION_MESSAGE, validateSessionOperation, sessionError, SESSION_MESSAGES } = require("./repository.js");
 
 const PORT = 3000;
 const PUBLIC_DIRECTORY = __dirname;
@@ -24,13 +24,22 @@ const CLEAR_ERROR_STATUS = {
   DATA_CORRUPT: 503,
   CLEAR_WRITE_FAILED: 503
 };
+const SESSION_ERROR_STATUS = { INVALID_SESSION_OPERATION: 400, INVALID_SESSION_DATA: 400, SESSION_NOT_FOUND: 404, IDEMPOTENCY_CONFLICT: 409, MAIN_DATA_MISSING: 500, DATA_CORRUPT: 500, WRITE_FAILED: 500, ID_ALLOCATION_FAILED: 500 };
+const SESSION_ERROR_MESSAGES = {
+  ...SESSION_MESSAGES,
+  MAIN_DATA_MISSING: "No se pueden leer los datos porque no existe el archivo principal.",
+  DATA_CORRUPT: CORRUPTION_MESSAGE,
+  WRITE_FAILED: "No se han podido guardar los datos. Inténtalo de nuevo.",
+  ID_ALLOCATION_FAILED: "No se pudo asignar un identificador a la sesión."
+};
 
 function createServer({ repository = createRepository() } = {}) {
-  return http.createServer((request, response) => {
+  return http.createServer(async (request, response) => {
     const url = new URL(request.url, "http://localhost");
     if (request.method === "GET" && url.pathname === "/api/data") {
       try {
-        sendJson(response, 200, { ok: true, data: repository.read() });
+        const data = repository.ensureNormalized ? await repository.ensureNormalized() : repository.read();
+        sendJson(response, 200, { ok: true, data });
       } catch (error) {
         const message = error instanceof DataReadError ? CORRUPTION_MESSAGE : "No se puede conectar con el servidor.";
         sendJson(response, 503, { ok: false, error: message });
@@ -42,7 +51,12 @@ function createServer({ repository = createRepository() } = {}) {
       request.on("data", chunk => { body += chunk; });
       request.on("end", async () => {
         try {
-          const operation = JSON.parse(body);
+          let operation;
+          try { operation = JSON.parse(body); } catch { throw sessionError("INVALID_SESSION_OPERATION"); }
+           if (operation && operation.type !== "clear-main-data") {
+            const validation = validateSessionOperation(operation);
+            if (validation) throw sessionError(validation);
+          }
           const result = await repository.enqueue(operation);
           if (operation && operation.type === "clear-main-data") {
             sendJson(response, 200, {
@@ -54,7 +68,9 @@ function createServer({ repository = createRepository() } = {}) {
             sendJson(response, 200, result);
           }
         } catch (error) {
-          if (error.code && CLEAR_ERROR_STATUS[error.code]) {
+          if (error.code && SESSION_ERROR_STATUS[error.code]) {
+            sendJson(response, SESSION_ERROR_STATUS[error.code], { ok: false, code: error.code, message: SESSION_ERROR_MESSAGES[error.code] });
+          } else if (error.code && CLEAR_ERROR_STATUS[error.code]) {
             sendJson(response, CLEAR_ERROR_STATUS[error.code], { ok: false, code: error.code, message: error.message });
           } else {
             sendJson(response, 503, { ok: false, error: error.message || "No se han podido guardar los datos. Inténtalo de nuevo." });

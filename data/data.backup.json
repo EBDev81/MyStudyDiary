@@ -184,7 +184,7 @@
     {
       "fecha": "2026-10-02",
       "tema": "Comprobación del mapa de calor",
-      "minutos": 160,
+      "minutos": 60,
       "id": 33
     },
     {
@@ -488,7 +488,7 @@
       "id": 83
     }
   ],
-  "objetivoSemanal": 200,
+  "objetivoSemanal": 300,
   "metadata": {
     "migration": {
       "status": "pending",
@@ -496,7 +496,7 @@
       "ignoredSources": [],
       "completedAt": null
     },
-    "successfulWrites": 13,
+    "successfulWrites": 10,
     "backupSuccessfulWrites": 10,
     "nextSessionId": 85
   }

@@ -99,7 +99,7 @@
       <button class="boton boton-peligro" type="button" id="abrir-borrado">Borrar todas las sesiones</button>
     </section>
 
-    <section class="sesiones">
+    <section class="sesiones" id="sesiones">
       <h2>Sesiones</h2>
       <p id="sin-sesiones" class="vacio">Todavía no hay sesiones registradas.</p>
       <ul id="lista-sesiones"></ul>
@@ -126,12 +126,28 @@
   <div class="dialogo-capa" id="dialogo-borrado-capa" hidden>
     <section class="dialogo-borrado" id="dialogo-borrado" role="alertdialog" aria-modal="true"
       aria-labelledby="titulo-confirmar-borrado" aria-describedby="advertencia-borrado" tabindex="-1">
-      <h2 id="titulo-confirmar-borrado">Confirmar borrado de sesiones</h2>
+       <h2 id="titulo-confirmar-borrado">Confirmar borrado de sesiones</h2>
       <p id="advertencia-borrado">Vas a borrar todas las sesiones de estudio. Esta acción no se puede deshacer y la copia de seguridad no se borrará. El objetivo semanal se conservará.</p>
       <div class="dialogo-acciones">
-        <button class="boton boton-peligro" type="button" id="confirmar-borrado">Borrar todas las sesiones</button>
+         <button class="boton boton-peligro" type="button" id="confirmar-borrado">Borrar todas las sesiones</button>
         <button class="boton boton-secundario" type="button" id="cancelar-borrado">Cancelar</button>
       </div>
+    </section>
+  </div>
+  <div class="dialogo-capa" id="dialogo-edicion-capa" hidden>
+    <section class="dialogo-borrado dialogo-edicion" id="dialogo-edicion" role="dialog" aria-modal="true"
+      aria-labelledby="titulo-edicion" aria-describedby="descripcion-edicion" tabindex="-1">
+      <h2 id="titulo-edicion">Editar sesión</h2>
+      <p id="descripcion-edicion">Modifica los datos de esta sesión.</p>
+      <form id="formulario-edicion" novalidate>
+        <label for="edicion-fecha">Fecha</label><input id="edicion-fecha" name="fecha" type="date" aria-describedby="error-edicion-fecha" required>
+        <small class="error-campo" id="error-edicion-fecha" role="alert" aria-live="polite"></small>
+        <label for="edicion-tema">Tema</label><input id="edicion-tema" name="tema" aria-describedby="error-edicion-tema" required>
+        <small class="error-campo" id="error-edicion-tema" role="alert" aria-live="polite"></small>
+        <label for="edicion-minutos">Minutos</label><input id="edicion-minutos" name="minutos" type="number" min="1" step="1" aria-describedby="error-edicion-minutos" required>
+        <small class="error-campo" id="error-edicion-minutos" role="alert" aria-live="polite"></small>
+        <div class="dialogo-acciones"><button class="boton" type="submit" id="guardar-edicion">Guardar cambios</button><button class="boton boton-secundario" type="button" id="cancelar-edicion">Cancelar</button></div>
+      </form>
     </section>
   </div>
   <p id="resultado-borrado" class="resultado-borrado" role="status" aria-live="polite" aria-atomic="true"></p>

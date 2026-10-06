@@ -4,7 +4,30 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { createInitialDataDocument } = require("../app.js");
-const { createRepository, CORRUPTION_MESSAGE, DataReadError, isValidClearRequest, operationFingerprint, buildClearedDocument, deriveBackupPending } = require("../repository.js");
+const { createRepository, CORRUPTION_MESSAGE, DataReadError, isValidClearRequest, operationFingerprint, buildClearedDocument, deriveBackupPending, classifyDataDocument, normalizeDataDocument, NORMALIZABLE, NORMALIZED, DATA_CORRUPT } = require("../repository.js");
+
+test("clasifica y normaliza IDs sin mutar la entrada ni tocar almacenamiento", () => {
+  const document = { version: 1, sesiones: [
+    { fecha: "2026-10-01", tema: " A ", minutos: 20, id: 4, desconocido: { x: 1 }, creado: "mal" },
+    { fecha: "2026-10-02", tema: "B", minutos: 10, id: 4 },
+    { fecha: "2026-10-03", tema: "C", minutos: 5 }
+  ], objetivoSemanal: null, metadata: { migration: { status: "pending", sources: [], ignoredSources: [], completedAt: null }, successfulWrites: 2, backupSuccessfulWrites: 1, nextSessionId: "mal", extra: true }, rootExtra: "ok" };
+  const before = structuredClone(document);
+  assert.equal(classifyDataDocument(document), NORMALIZABLE);
+  const normalized = normalizeDataDocument(document);
+  assert.deepEqual(document, before);
+  assert.deepEqual(normalized.sesiones.map(session => session.id), [4, 1, 2]);
+  assert.equal(normalized.metadata.nextSessionId, 5);
+  assert.equal(normalized.sesiones[0].creado, undefined);
+  assert.deepEqual(normalized.sesiones[0].desconocido, { x: 1 });
+  assert.equal(classifyDataDocument(normalized), NORMALIZED);
+});
+
+test("rechaza corrupción obligatoria y migración incoherente", () => {
+  const base = { version: 1, sesiones: [], objetivoSemanal: null, metadata: { migration: { status: "pending", sources: [], ignoredSources: [], completedAt: null }, successfulWrites: 0, backupSuccessfulWrites: 0 } };
+  assert.equal(classifyDataDocument({ ...base, sesiones: [{ fecha: "no", tema: "x", minutos: 1 }] }), DATA_CORRUPT);
+  assert.equal(classifyDataDocument({ ...base, metadata: { ...base.metadata, migration: { status: "completed", sources: [], ignoredSources: [], completedAt: null } } }), DATA_CORRUPT);
+});
 
 function fixture() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "diario-repository-"));
@@ -46,6 +69,24 @@ test("serializa operaciones, hace idempotencia y rechaza payload conflictivo", a
   await assert.rejects(repository.enqueue({ operationId: "op-1", type: "session", payload: { fecha: "2026-10-02", tema: "B", minutos: 20 } }), /operación ya existe/);
   assert.equal(repository.read().sesiones.length, 1);
   assert.equal(repository.read().metadata.successfulWrites, 2);
+});
+
+test("edición y borrado reutilizan la respuesta con propiedades JSON reordenadas", async () => {
+  const paths = fixture();
+  const repository = createRepository({ dataFile: paths.file, backupFile: paths.backup });
+  await repository.enqueue({ operationId: "alta", type: "session", payload: { fecha: "2026-10-06", tema: "Repaso", minutos: 20 } });
+  const edit = { type: "edit-session", operationId: "edit-1", payload: { id: 1, session: { fecha: "2026-10-07", tema: "Nuevo", minutos: 25 } } };
+  const edited = await repository.enqueue(edit);
+  const editedAgain = await repository.enqueue({
+    payload: { session: { minutos: 25, tema: " Nuevo ", fecha: "2026-10-07" }, id: 1 },
+    operationId: "edit-1", type: "edit-session"
+  });
+  assert.deepEqual(editedAgain, edited);
+
+  const remove = { type: "delete-session", operationId: "delete-1", payload: { id: 1 } };
+  const deleted = await repository.enqueue(remove);
+  const deletedAgain = await repository.enqueue({ payload: { id: 1 }, operationId: "delete-1", type: "delete-session" });
+  assert.deepEqual(deletedAgain, deleted);
 });
 
 test("valida el contrato raíz exacto de clear-main-data sin depender del orden", () => {
@@ -197,6 +238,37 @@ test("si falla el backup, la siguiente escritura lo reintenta", async () => {
     assert.equal(result.backupPending, false);
     assert.equal(repository.read().metadata.backupSuccessfulWrites, 6);
   } finally { fs.renameSync = originalRename; }
+});
+
+test("si falla el ajuste secundario del contador, conserva backupPending para reintentar", async () => {
+  const paths = fixture();
+  const originalRename = fs.renameSync;
+  let dataRenames = 0;
+  fs.renameSync = (from, to) => {
+    if (to === paths.file && fs.existsSync(paths.backup)) {
+      const current = JSON.parse(fs.readFileSync(paths.file, "utf8"));
+      if (current.metadata.successfulWrites === 5) throw new Error("fallo del ajuste");
+    }
+    return originalRename(from, to);
+  };
+  try {
+    const repository = createRepository({ dataFile: paths.file, backupFile: paths.backup });
+    for (let i = 1; i <= 5; i++) {
+      const result = await repository.enqueue({ operationId: `secondary-${i}`, type: "session", payload: { fecha: "2026-10-02", tema: `S${i}`, minutos: 10 } });
+      if (i === 5) assert.equal(result.backupPending, true);
+    }
+    assert.equal(repository.read().metadata.backupSuccessfulWrites, 0);
+    assert.equal(repository.readBackup().metadata.backupSuccessfulWrites, 5);
+  } finally { fs.renameSync = originalRename; }
+});
+
+test("ensureNormalized clasifica metadata de migración inválida como DATA_CORRUPT", async () => {
+  const paths = fixture();
+  const document = createInitialDataDocument();
+  document.metadata.migration = { status: "completed", sources: [], ignoredSources: [], completedAt: null };
+  fs.writeFileSync(paths.file, JSON.stringify(document));
+  const repository = createRepository({ dataFile: paths.file, backupFile: paths.backup });
+  await assert.rejects(repository.ensureNormalized(), error => error.code === "DATA_CORRUPT" && /No se pueden leer/.test(error.message));
 });
 
 test("un backup inválido no restaura el principal ni se usa automáticamente", async () => {

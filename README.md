@@ -19,6 +19,9 @@ La aplicación está pensada para alguien que empieza a programar: no depende de
 
 - Registrar una sesión con fecha, tema y minutos.
 - Editar la fecha para registrar sesiones anteriores.
+- Editar individualmente fecha, tema y minutos desde un modal accesible.
+- Borrar una sesión individual con confirmación explícita; también se conserva el borrado de todas las sesiones.
+- Cada sesión tiene un ID interno estable para editarla o borrarla sin confundir registros.
 - Mostrar las sesiones ordenadas de la más reciente a la más antigua.
 - Mostrar como máximo diez sesiones por página, con controles `<< < > >>`.
 - Navegar mediante una ventana consecutiva de hasta cinco números de página, que siempre incluye la página actual.
@@ -90,6 +93,9 @@ El proyecto utiliza Specification-Driven Development (SDD): primero se define qu
 - `specs/005-session-pagination/spec.md`: especificación de la paginación de sesiones.
 - `specs/005-session-pagination/plan.md`: plan técnico de la paginación.
 - `specs/005-session-pagination/tasks.md`: tareas de la paginación.
+- `specs/006-session-edit-delete/spec.md`: especificación de edición y borrado individual.
+- `specs/006-session-edit-delete/plan.md`: plan técnico de edición y borrado individual.
+- `specs/006-session-edit-delete/tasks.md`: tareas de edición y borrado individual.
 
 ## Agentes utilizados en OpenCode
 
@@ -179,12 +185,15 @@ El formato actual normalizado de una sesión es:
 
 ```js
 {
+  id: 1,
   fecha: "AAAA-MM-DD",
   tema: "Tema estudiado",
   minutos: 45,
   creado: 1234567890
 }
 ```
+
+`id` es un entero seguro positivo obligatorio y estable para cada sesión.
 
 La migración también puede reconocer el formato histórico:
 
@@ -229,6 +238,16 @@ La acción no tiene deshacer.
 Si el borrado no puede completarse, la aplicación muestra un error general claro y no presenta la operación como realizada.
 
 Ante una respuesta incierta por desconexión o tiempo de espera, no se reintenta automáticamente: hay que recargar la página y decidir manualmente si se vuelve a intentar.
+
+### Edición y borrado individual
+
+Cada fila muestra acciones para **Editar sesión** y **Borrar sesión**. La edición abre un modal con fecha, tema y minutos; el borrado individual reutiliza un diálogo de confirmación. Ambas operaciones identifican la sesión por su ID interno, no por su posición ni por su fecha. El servidor normaliza primero los documentos históricos sin ID, antes de servirlos a la interfaz, y conserva los campos desconocidos.
+
+Los modales usan `role`, `aria-modal`, descripción, foco inicial y retorno al botón de origen, trampa de foco y cierre con Escape. Los controles se bloquean mientras se guarda o borra. Los errores del servidor se muestran sin presentar la operación como exitosa; una respuesta incierta por desconexión o timeout no se reintenta automáticamente.
+
+Tras una respuesta confirmada se reconstruyen la lista, la paginación y las estadísticas desde el documento del servidor. La lista se ordena por fecha descendente, `creado` válido descendente, ID descendente y orden original como último desempate. Tiene diez sesiones por página y ajusta la página si una eliminación deja esa página vacía.
+
+Cada escritura confirmada puede actualizar `data/data.backup.json` según el umbral configurado. El backup se valida antes de sustituirse, nunca restaura automáticamente el principal y un fallo secundario conserva el éxito principal mostrando que el backup queda pendiente.
 
 ## Lógica de fechas y estadísticas
 
@@ -360,6 +379,8 @@ También se puede comprobar la sintaxis de la aplicación con:
 
 ```bash
 node --check app.js
+node --check server.js
+node --check repository.js
 ```
 
 ### Chrome DevTools
@@ -370,7 +391,7 @@ Después de cambios visuales o funcionales:
 2. Revisar la consola.
 3. Probar formularios y estados de la interfaz.
 4. Revisar foco y teclado.
-5. Emular `375 × 812` para móvil.
+5. Emular `1440 × 900` y `375 × 812` con densidad 1; en móvil activar emulación táctil.
 6. Confirmar que no existe overflow horizontal.
 7. Comprobar que los datos guardados no se han borrado ni alterado.
 
@@ -386,6 +407,8 @@ Para comprobar manualmente el borrado:
 8. Confirmar que no existe reintento automático tras una desconexión o tiempo de espera.
 9. Repetir las comprobaciones en escritorio y en una vista móvil de `375 × 812`.
 10. Confirmar que la consola permanece limpia y que no existe overflow horizontal.
+
+Para edición y borrado individual, comprobar además editar/cancelar/guardar, borrar/cancelar/confirmar, Escape, trampa de foco, bloqueo durante la petición, mensajes de error y paginación. Verificar objetivos táctiles mínimos de 44 × 44 CSS px y que las operaciones destructivas se prueben con una copia temporal, nunca con los JSON reales.
 
 Para la lista paginada, comprobar además con teclado que el foco sigue el botón de la página activa,
 que los límites están desactivados y que se anuncia «Página X de Y». En escritorio y en móvil de

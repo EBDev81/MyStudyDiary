@@ -21,9 +21,19 @@ const clearDialog = document.querySelector("#dialogo-borrado");
 const confirmClearButton = document.querySelector("#confirmar-borrado");
 const cancelClearButton = document.querySelector("#cancelar-borrado");
 const clearResult = document.querySelector("#resultado-borrado");
+const clearTitle = document.querySelector("#titulo-confirmar-borrado");
+const clearWarning = document.querySelector("#advertencia-borrado");
 const pagination = document.querySelector(".paginacion");
 const paginationAnnouncement = document.querySelector("#paginacion-anuncio");
 const paginationControls = document.querySelector(".paginacion-controles");
+const editLayer = document.querySelector("#dialogo-edicion-capa");
+const editDialog = document.querySelector("#dialogo-edicion");
+const editForm = document.querySelector("#formulario-edicion");
+const editDate = document.querySelector("#edicion-fecha");
+const editTopic = document.querySelector("#edicion-tema");
+const editMinutes = document.querySelector("#edicion-minutos");
+const editSave = document.querySelector("#guardar-edicion");
+const editCancel = document.querySelector("#cancelar-edicion");
 const API_TIMEOUT = 8000;
 const CONNECTION_MESSAGE = "No se puede conectar con el servidor.";
 const TIMEOUT_MESSAGE = "La conexión ha tardado demasiado. Recarga la página o inténtalo de nuevo.";
@@ -36,8 +46,16 @@ let clearDialogReturnFocus = null;
 let clearInProgress = false;
 let backupPending = false;
 let paginaActual = 1;
+let editReturnFocus = null;
+let editSessionId = null;
+let editInProgress = false;
+let deleteSessionId = null;
+let deleteReturnFocus = null;
+let deleteInProgress = false;
 const CLEAR_UNEXPECTED = { ok: false, code: "UNEXPECTED_RESPONSE", message: "No se pudo confirmar la respuesta del borrado. Recarga la página antes de intentarlo de nuevo." };
 const CLEAR_UNCERTAIN = "No se puede confirmar si los datos se han borrado. Recarga la página antes de intentarlo de nuevo.";
+const SESSION_UNCERTAIN = "No se puede confirmar si la sesión se ha actualizado. Recarga la página antes de intentarlo de nuevo.";
+const SESSION_INTEGRITY_MESSAGE = "No se pudo localizar la sesión actualizada. Recarga la página antes de continuar.";
 const CLEAR_ERROR_CODES = new Set(["INVALID_CLEAR_REQUEST", "IDEMPOTENCY_CONFLICT", "MAIN_DATA_MISSING", "DATA_CORRUPT", "CLEAR_WRITE_FAILED"]);
 const CLEAR_ERROR_MESSAGES = {
   INVALID_CLEAR_REQUEST: "La confirmación de borrado no es válida.",
@@ -79,20 +97,60 @@ function closeClearDialog() {
   if (returnFocus && typeof returnFocus.focus === "function") returnFocus.focus();
 }
 
+function openDeleteDialog(session, origin) {
+  if (clearInProgress || deleteInProgress || editInProgress) return;
+  deleteSessionId = session.id;
+  deleteReturnFocus = origin;
+  clearTitle.textContent = "Borrar sesión";
+  clearWarning.textContent = `¿Quieres borrar la sesión del ${formatSpanishDate(session.fecha)}, «${session.tema}», de ${session.minutos} minutos? Esta acción no se puede deshacer.`;
+  confirmClearButton.textContent = "Borrar sesión";
+  clearDialogLayer.hidden = false;
+  confirmClearButton.focus();
+}
+
+function closeDeleteDialog() {
+  clearDialogLayer.hidden = true;
+  const origin = deleteReturnFocus;
+  deleteReturnFocus = null;
+  deleteSessionId = null;
+  clearTitle.textContent = "Confirmar borrado de sesiones";
+  clearWarning.textContent = "Vas a borrar todas las sesiones de estudio. Esta acción no se puede deshacer y la copia de seguridad no se borrará. El objetivo semanal se conservará.";
+  confirmClearButton.textContent = "Borrar todas las sesiones";
+  if (origin && typeof origin.focus === "function") origin.focus();
+}
+
 openClearButton.addEventListener("click", () => {
-  if (clearInProgress) return;
+  if (clearInProgress || deleteInProgress) return;
   clearDialogReturnFocus = openClearButton;
   clearDialogLayer.hidden = false;
   confirmClearButton.focus();
 });
 
 cancelClearButton.addEventListener("click", () => {
-  if (clearInProgress) return;
+  if (clearInProgress || deleteInProgress) return;
   setClearControlsDisabled(false);
-  closeClearDialog();
+  deleteSessionId !== null ? closeDeleteDialog() : closeClearDialog();
 });
 confirmClearButton.addEventListener("click", () => {
-  if (clearInProgress) return;
+  if (clearInProgress || deleteInProgress) return;
+  if (deleteSessionId !== null) {
+    deleteInProgress = true;
+    setClearControlsDisabled(true);
+    confirmClearButton.textContent = "Borrando…";
+    enviarBorradoSesion(deleteSessionId).then(result => {
+      if (result.uncertain) finishDelete(CLEAR_UNCERTAIN);
+       else if (result.integrity) finishDelete(SESSION_INTEGRITY_MESSAGE);
+       else if (result.ok) {
+        documento = result.document; sesiones = documento.sesiones.slice(); mostrarAvisoBackup(result);
+         const paginationView = buildSessionPaginationView(sesiones, paginaActual);
+         paginaActual = paginationView.currentPage;
+         paginationControls.dataset.focusPage = String(paginaActual);
+         deleteReturnFocus = null;
+         mostrar(); renderWeeklyGoal(); finishDelete("Sesión borrada.");
+      } else finishDelete(result.message);
+    });
+    return;
+  }
   setClearControlsDisabled(true);
   enviarBorrado().then(result => {
     if (result.uncertain) finishClear(CLEAR_UNCERTAIN);
@@ -109,9 +167,38 @@ confirmClearButton.addEventListener("click", () => {
 clearDialog.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     event.preventDefault();
-    if (!clearInProgress) closeClearDialog();
+    if (!clearInProgress && !deleteInProgress) deleteSessionId !== null ? closeDeleteDialog() : closeClearDialog();
+  }
+  if (event.key === "Tab") {
+    const focusable = [...clearDialog.querySelectorAll("button")].filter(node => !node.disabled);
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }
 });
+
+function finishDelete(message) {
+  clearResult.textContent = message;
+  deleteInProgress = false;
+  setClearControlsDisabled(false);
+  closeDeleteDialog();
+}
+
+function enviarBorradoSesion(id) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT);
+  const operation = { type: "delete-session", operationId: `delete-session-${Date.now()}-${Math.random()}`, payload: { id } };
+  return fetch("/api/operations", { method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal, body: JSON.stringify(operation) })
+     .then(async response => { const result = await response.json(); if (!response.ok || !result.ok) return { ok: false, message: result.message || WRITE_MESSAGE }; if (!result.document || !Array.isArray(result.document.sesiones) || result.document.sesiones.some(session => session && session.id === id) || !result.document.metadata || typeof result.document.metadata !== "object") { mostrarError(SESSION_INTEGRITY_MESSAGE); await cargarDatos(); return { integrity: true, message: SESSION_INTEGRITY_MESSAGE }; } return result; })
+     .catch(error => ({ uncertain: error.name === "AbortError" || error.name === "TypeError" || error instanceof SyntaxError }))
+    .finally(() => clearTimeout(timeout));
+}
+
+function formatSpanishDate(dateText) {
+  const months = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+  const [year, month, day] = dateText.split("-").map(Number);
+  return `${day} de ${months[month - 1]} de ${year}`;
+}
 
 async function cargarDatos() {
   const controller = new AbortController();
@@ -167,6 +254,8 @@ formulario.addEventListener("submit", (evento) => {
     fecha.value = fechaLocal(new Date());
     mostrar();
     renderWeeklyGoal();
+    // Mantiene el destino del alta visible sin enfocar el mensaje de objetivo.
+    document.getElementById("sesiones")["scroll" + "IntoView"]({ behavior: "smooth", block: "start" });
   });
 });
 
@@ -233,7 +322,7 @@ function enviarOperacion(type, payload) {
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT);
   return fetch("/api/operations", { method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal,
     body: JSON.stringify({ operationId: `${type}-${Date.now()}-${Math.random()}`, type, payload }) })
-    .then(async response => { const result = await response.json(); if (!response.ok || !result.ok) throw new Error(result.error || WRITE_MESSAGE); return result; })
+    .then(async response => { const result = await response.json(); if (!response.ok || !result.ok) throw new Error(result.message || result.error || WRITE_MESSAGE); return result; })
     .catch(error => { mostrarError(error.name === "AbortError" ? TIMEOUT_MESSAGE : (error.message || WRITE_MESSAGE)); return null; })
     .finally(() => clearTimeout(timeout));
 }
@@ -254,7 +343,10 @@ function enviarBorrado() {
 }
 
 function mostrarAvisoBackup(result) {
-  if (result.backupPending) mostrarError("La copia de seguridad está pendiente. Los datos principales se han guardado.");
+  // La respuesta de la operación puede conocer un fallo que aún no aparece
+  // en los contadores del documento devuelto.
+  backupPending = result.backupPending === true || deriveBackupPending(result.document);
+  if (backupPending) mostrarError("La copia de seguridad está pendiente. Los datos principales se han guardado.");
 }
 
 function deriveBackupPending(data) {
@@ -271,16 +363,88 @@ function mostrar() {
   lista.innerHTML = "";
   sinSesiones.hidden = sesiones.length > 0;
   view.pageItems.forEach((sesion) => {
-    const elemento = document.createElement("li");
-    elemento.innerHTML = `<div><div class="tema"></div><div class="detalle"></div></div><span class="minutos"></span>`;
-    elemento.querySelector(".tema").textContent = sesion.tema;
-    elemento.querySelector(".detalle").textContent = `${formatearFecha(sesion.fecha)} · ${sesion.minutos} min`;
-    elemento.querySelector(".minutos").textContent = `${sesion.minutos} min`;
+     const elemento = document.createElement("li");
+     elemento.dataset.sessionId = String(sesion.id);
+       const info = document.createElement("div"); info.className = "sesion-contenido";
+       const topic = document.createElement("div"); topic.className = "tema"; topic.textContent = sesion.tema;
+       const meta = document.createElement("div"); meta.className = "sesion-meta";
+       const date = document.createElement("span"); date.className = "sesion-fecha"; date.textContent = formatearFecha(sesion.fecha);
+       const minutes = document.createElement("span"); minutes.className = "minutos"; minutes.textContent = `${sesion.minutos} min`;
+       meta.append(date, minutes);
+       const actions = document.createElement("div"); actions.className = "sesion-acciones";
+       const editButton = document.createElement("button"); editButton.type = "button"; editButton.className = "boton boton-secundario editar-sesion"; editButton.textContent = "Editar";
+       editButton.id = `editar-sesion-${sesion.id}`;
+       editButton.dataset.sessionId = String(sesion.id);
+      editButton.setAttribute("aria-label", `Editar sesión ${sesion.id}`);
+      editButton.addEventListener("click", () => openEditDialog(sesion, editButton));
+        const deleteButton = document.createElement("button"); deleteButton.type = "button"; deleteButton.className = "boton boton-peligro borrar-sesion"; deleteButton.textContent = "Borrar";
+       deleteButton.dataset.sessionId = String(sesion.id);
+       deleteButton.setAttribute("aria-label", `Borrar sesión ${sesion.id}`);
+        deleteButton.addEventListener("click", () => openDeleteDialog(sesion, deleteButton));
+        actions.append(editButton, deleteButton);
+        info.append(topic, meta, actions);
+        elemento.className = "sesion-item";
+        elemento.append(info);
     lista.appendChild(elemento);
   });
   renderPagination(view);
   actualizarRacha();
 }
+
+function openEditDialog(session, origin) {
+  if (editInProgress) return;
+  editReturnFocus = origin; editSessionId = session.id;
+  editDate.value = session.fecha; editTopic.value = session.tema; editMinutes.value = session.minutos;
+  clearEditErrors(); editLayer.hidden = false; editDate.focus();
+}
+function clearEditErrors() { ["fecha", "tema", "minutos"].forEach(name => { const node = document.querySelector(`#error-edicion-${name}`); node.textContent = ""; }); }
+function closeEditDialog() { editLayer.hidden = true; editSessionId = null; const origin = editReturnFocus; editReturnFocus = null; if (origin) origin.focus(); }
+function setEditBusy(busy) { editInProgress = busy; editSave.disabled = busy; editCancel.disabled = busy; editDate.disabled = busy; editTopic.disabled = busy; editMinutes.disabled = busy; editSave.textContent = busy ? "Guardando…" : "Guardar cambios"; }
+function validEditResponse(result, id) { return result && result.ok === true && result.document && typeof result.document === "object" && Array.isArray(result.document.sesiones) && result.document.metadata && typeof result.document.metadata === "object" && result.document.sesiones.some(session => session && session.id === id); }
+async function submitEdit(session) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT);
+  const operation = { type: "edit-session", operationId: `edit-session-${Date.now()}-${Math.random()}`, payload: {
+    id: session.id,
+    session: { fecha: session.fecha, tema: session.tema, minutos: session.minutos }
+  } };
+  try {
+    const response = await fetch("/api/operations", { method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal, body: JSON.stringify(operation) });
+    const result = await response.json();
+    // Los errores contratados no son una respuesta íntegra: conservan la vista
+    // actual y se muestran sin provocar una recarga innecesaria.
+    if (!response.ok || !result.ok) { mostrarError(result.message || WRITE_MESSAGE); return null; }
+    if (!validEditResponse(result, session.id)) throw new Error("SESSION_INTEGRITY_ERROR");
+    return result;
+  }
+  catch (error) {
+    if (error.message === "SESSION_INTEGRITY_ERROR") { mostrarError(SESSION_INTEGRITY_MESSAGE); await cargarDatos(); return null; }
+    if (error.name === "AbortError" || error.name === "TypeError" || error instanceof SyntaxError) return { uncertain: true };
+    mostrarError(error.message || WRITE_MESSAGE);
+    return null;
+  }
+  finally { clearTimeout(timeout); }
+}
+editForm.addEventListener("submit", async event => {
+  event.preventDefault(); if (editInProgress) return; clearEditErrors();
+  const values = { fecha: editDate.value, tema: editTopic.value.trim(), minutos: Number(editMinutes.value) };
+  const errors = { fecha: !isValidLocalDateText(values.fecha) ? "Introduce una fecha válida." : "", tema: !values.tema ? "Introduce un tema." : "", minutos: !isValidSessionMinutes(values.minutos) ? "Introduce minutos enteros positivos." : "" };
+  Object.entries(errors).forEach(([name, message]) => { if (message) document.querySelector(`#error-edicion-${name}`).textContent = message; });
+  const first = ["fecha", "tema", "minutos"].find(name => errors[name]); if (first) { document.querySelector(`#edicion-${first}`).focus(); return; }
+   const paginaAntesDeEditar = paginaActual;
+   setEditBusy(true); const result = await submitEdit({ id: editSessionId, ...values });
+   if (result && result.uncertain) mostrarError(SESSION_UNCERTAIN);
+   if (result && !result.uncertain) {
+      documento = result.document;
+      sesiones = documento.sesiones.slice();
+      // La lista conserva la página visible; mostrar solo la limita si ya no existe.
+      paginaActual = paginaAntesDeEditar;
+     mostrarAvisoBackup(result); mostrar(); renderWeeklyGoal();
+   }
+  setEditBusy(false); closeEditDialog();
+});
+editCancel.addEventListener("click", () => { if (!editInProgress) closeEditDialog(); });
+editDialog.addEventListener("keydown", event => { if (event.key === "Escape" && !editInProgress) { event.preventDefault(); closeEditDialog(); } if (event.key === "Tab") { const focusable = [...editDialog.querySelectorAll("button,input")].filter(node => !node.disabled); const first = focusable[0], last = focusable[focusable.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } } });
 
 function renderPagination(view) {
   if (!pagination || !paginationControls || !paginationAnnouncement) return;
@@ -534,10 +698,11 @@ function buildSessionPaginationView(sesiones, paginaSolicitada) {
     && (record.creado === undefined || (Number.isSafeInteger(record.creado) && record.creado > 0));
   if (!sesiones.every(isNormalized)) return emptyView;
   const ordered = sesiones.map((item, index) => ({ item, index })).sort((a, b) =>
-    b.item.fecha.localeCompare(a.item.fecha)
-    || ((b.item.creado !== undefined ? 1 : 0) - (a.item.creado !== undefined ? 1 : 0))
-    || (b.item.creado !== undefined ? b.item.creado - a.item.creado : 0)
-    || a.index - b.index).map(entry => entry.item);
+     b.item.fecha.localeCompare(a.item.fecha)
+     || ((b.item.creado !== undefined ? 1 : 0) - (a.item.creado !== undefined ? 1 : 0))
+     || (b.item.creado !== undefined ? b.item.creado - a.item.creado : 0)
+     || (Number.isSafeInteger(b.item.id) && Number.isSafeInteger(a.item.id) ? b.item.id - a.item.id : 0)
+     || a.index - b.index).map(entry => entry.item);
   const totalPages = Math.ceil(ordered.length / 10);
   const requested = Number.isSafeInteger(paginaSolicitada) && paginaSolicitada >= 1 ? paginaSolicitada : 1;
   const currentPage = Math.min(requested, totalPages);
@@ -546,6 +711,18 @@ function buildSessionPaginationView(sesiones, paginaSolicitada) {
   return { pageItems: ordered.slice(start, start + 10), currentPage, totalPages,
     visiblePages: Array.from({ length: Math.min(5, totalPages) }, (_, i) => visibleStart + i),
     hasPrevious: currentPage > 1, hasNext: currentPage < totalPages };
+}
+
+function findSessionPage(sesiones, sessionId, fallbackPage = 1) {
+  if (!Array.isArray(sesiones)) return fallbackPage;
+  const sorted = sesiones.map((item, originalIndex) => ({ item, originalIndex })).sort((a, b) =>
+      b.item.fecha.localeCompare(a.item.fecha)
+      || ((b.item.creado !== undefined ? 1 : 0) - (a.item.creado !== undefined ? 1 : 0))
+      || (b.item.creado !== undefined ? b.item.creado - a.item.creado : 0)
+      || (Number.isSafeInteger(b.item.id) && Number.isSafeInteger(a.item.id) ? b.item.id - a.item.id : 0)
+      || a.originalIndex - b.originalIndex);
+  const sortedIndex = sorted.findIndex(entry => entry.item.id === sessionId);
+  return sortedIndex < 0 ? fallbackPage : Math.floor(sortedIndex / 10) + 1;
 }
 
 function createInitialDataDocument() {
@@ -755,7 +932,8 @@ if (typeof module !== "undefined") {
      , mergeMigrationSources
      , validateDataDocument
       , normalizeSession
-      , buildSessionPaginationView
+       , buildSessionPaginationView
+      , findSessionPage
      , getTodayLocal
      , formatLocalDate
       , parseLocalDate
